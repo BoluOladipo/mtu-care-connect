@@ -10,6 +10,10 @@ import Appointments from "./pages/Appointments";
 import Pharmacy from "./pages/Pharmacy";
 import Laboratory from "./pages/Laboratory";
 import Immunization from "./pages/Immunization";
+import Consultations from "./pages/Consultations";
+import Reports from "./pages/Reports";
+import Records from "./pages/Records";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +32,10 @@ const App = () => (
           <Route path="/pharmacy" element={<Pharmacy />} />
           <Route path="/laboratory" element={<Laboratory />} />
           <Route path="/immunization" element={<Immunization />} />
+          <Route path="/consultations" element={<Consultations />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/records" element={<Records />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
