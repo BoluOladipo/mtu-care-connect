@@ -12,8 +12,11 @@ import {
   AlertTriangle,
   Pill,
 } from "lucide-react";
+import { useDashboardStats } from "@/hooks/useDashboard";
 
 const Dashboard = () => {
+  const { data: stats, isLoading } = useDashboardStats();
+
   return (
     <AppLayout title="Dashboard" subtitle="MTU Health Centre Overview">
       <div className="space-y-6">
@@ -21,39 +24,37 @@ const Dashboard = () => {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatCard
             title="Patients Today"
-            value={42}
+            value={isLoading ? "..." : stats?.totalPatientsToday || 0}
             icon={Users}
             variant="primary"
-            trend={{ value: 12, isPositive: true }}
           />
           <StatCard
             title="In Queue"
-            value={8}
+            value={isLoading ? "..." : stats?.currentQueueLength || 0}
             icon={ClipboardList}
             variant="info"
           />
           <StatCard
             title="Avg. Wait Time"
-            value="18 min"
+            value={isLoading ? "..." : `${stats?.averageWaitTime || 0} min`}
             icon={Clock}
             variant="default"
-            trend={{ value: 5, isPositive: false }}
           />
           <StatCard
             title="Appointments"
-            value={24}
+            value={isLoading ? "..." : stats?.appointmentsToday || 0}
             icon={Calendar}
             variant="success"
           />
           <StatCard
             title="Low Stock Items"
-            value={5}
+            value={isLoading ? "..." : stats?.lowStockAlerts || 0}
             icon={AlertTriangle}
             variant="warning"
           />
           <StatCard
             title="Expiring Soon"
-            value={3}
+            value={isLoading ? "..." : stats?.expiringDrugsCount || 0}
             icon={Pill}
             variant="warning"
           />
