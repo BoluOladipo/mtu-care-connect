@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  ChevronDown,
   Stethoscope,
 } from "lucide-react";
 import {
@@ -25,16 +24,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 const mainNavItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
@@ -58,8 +50,30 @@ const adminNavItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { profile, roles, signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
+
+  const getInitials = (name: string) => {
+    const parts = name.split(" ");
+    return parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  };
+
+  const getRoleLabel = () => {
+    if (roles.includes("admin")) return "Administrator";
+    if (roles.includes("doctor")) return "Doctor";
+    if (roles.includes("nurse")) return "Nurse";
+    if (roles.includes("pharmacist")) return "Pharmacist";
+    if (roles.includes("lab_technician")) return "Lab Technician";
+    if (roles.includes("receptionist")) return "Receptionist";
+    return "Staff";
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <Sidebar className="border-r border-sidebar-border">
@@ -152,16 +166,21 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-9 w-9">
-            <AvatarImage src="" />
+            <AvatarImage src={profile?.avatar_url || ""} />
             <AvatarFallback className="bg-primary text-primary-foreground">
-              DR
+              {profile?.full_name ? getInitials(profile.full_name) : "U"}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-1 flex-col">
-            <span className="text-sm font-medium text-sidebar-foreground">Dr. Johnson</span>
-            <span className="text-xs text-muted-foreground">General Physician</span>
+            <span className="text-sm font-medium text-sidebar-foreground">
+              {profile?.full_name || "User"}
+            </span>
+            <span className="text-xs text-muted-foreground">{getRoleLabel()}</span>
           </div>
-          <button className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground">
+          <button 
+            onClick={handleLogout}
+            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
