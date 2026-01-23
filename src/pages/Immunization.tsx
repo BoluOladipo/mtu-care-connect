@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,23 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Search,
   Plus,
@@ -21,82 +39,28 @@ import {
   FileText,
   CheckCircle,
   Clock,
+  Loader2,
 } from "lucide-react";
-import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useImmunizations, useCreateImmunization, getImmunizationStatus } from "@/hooks/useImmunizations";
+import { usePatients } from "@/hooks/usePatients";
+import { useAuth } from "@/contexts/AuthContext";
+import { useForm } from "react-hook-form";
+import { cn } from "@/lib/utils";
 
-interface ImmunizationRecord {
-  id: string;
-  patientId: string;
-  patientName: string;
-  studentId: string;
-  vaccineName: string;
-  dateAdministered: string;
-  administeredBy: string;
-  batchNumber: string;
-  nextDoseDate?: string;
-  status: "completed" | "due" | "overdue";
-}
-
-const mockRecords: ImmunizationRecord[] = [
-  {
-    id: "1",
-    patientId: "p1",
-    patientName: "Adebayo Oluwaseun",
-    studentId: "MTU/2023/0451",
-    vaccineName: "Hepatitis B - Dose 1",
-    dateAdministered: "2024-01-10",
-    administeredBy: "Nurse Mary",
-    batchNumber: "HB-2024-001",
-    nextDoseDate: "2024-02-10",
-    status: "completed",
-  },
-  {
-    id: "2",
-    patientId: "p2",
-    patientName: "Chiamaka Okonkwo",
-    studentId: "MTU/2022/1234",
-    vaccineName: "Meningitis ACYW135",
-    dateAdministered: "2024-01-12",
-    administeredBy: "Dr. Johnson",
-    batchNumber: "MN-2024-002",
-    status: "completed",
-  },
-  {
-    id: "3",
-    patientId: "p3",
-    patientName: "Emmanuel Nwosu",
-    studentId: "MTU/2024/0089",
-    vaccineName: "Hepatitis B - Dose 2",
-    dateAdministered: "",
-    administeredBy: "",
-    batchNumber: "",
-    nextDoseDate: "2024-01-20",
-    status: "due",
-  },
-  {
-    id: "4",
-    patientId: "p4",
-    patientName: "Fatima Abubakar",
-    studentId: "MTU/2023/0567",
-    vaccineName: "Yellow Fever",
-    dateAdministered: "2024-01-08",
-    administeredBy: "Nurse Grace",
-    batchNumber: "YF-2024-003",
-    status: "completed",
-  },
-  {
-    id: "5",
-    patientId: "p5",
-    patientName: "Grace Okafor",
-    studentId: "MTU/2021/2345",
-    vaccineName: "Tetanus Booster",
-    dateAdministered: "",
-    administeredBy: "",
-    batchNumber: "",
-    nextDoseDate: "2024-01-05",
-    status: "overdue",
-  },
+const vaccines = [
+  "Hepatitis B - Dose 1",
+  "Hepatitis B - Dose 2",
+  "Hepatitis B - Dose 3",
+  "Meningitis ACYW135",
+  "Yellow Fever",
+  "Tetanus Booster",
+  "COVID-19 - Dose 1",
+  "COVID-19 - Dose 2",
+  "COVID-19 Booster",
+  "Typhoid",
+  "HPV - Dose 1",
+  "HPV - Dose 2",
 ];
 
 const statusConfig = {
@@ -107,22 +71,54 @@ const statusConfig = {
 
 const Immunization = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { user } = useAuth();
 
-  const filteredRecords = mockRecords.filter(
-    (record) =>
-      record.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.vaccineName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const { data: immunizations = [], isLoading } = useImmunizations(searchQuery);
+  const { data: patients = [] } = usePatients(patientSearch);
+  const createImmunization = useCreateImmunization();
 
-  const completedCount = mockRecords.filter((r) => r.status === "completed").length;
-  const dueCount = mockRecords.filter((r) => r.status === "due").length;
-  const overdueCount = mockRecords.filter((r) => r.status === "overdue").length;
+  const { register, handleSubmit, reset, setValue, watch } = useForm({
+    defaultValues: {
+      patient_id: "",
+      vaccine_name: "",
+      batch_number: "",
+      next_dose_date: "",
+      notes: "",
+    },
+  });
 
-  const getInitials = (name: string) => {
-    const parts = name.split(" ");
-    return parts.map((p) => p[0]).join("").toUpperCase();
+  const selectedPatientId = watch("patient_id");
+
+  // Calculate stats with status
+  const recordsWithStatus = immunizations.map((record) => ({
+    ...record,
+    computedStatus: getImmunizationStatus(record),
+  }));
+
+  const completedCount = recordsWithStatus.filter((r) => r.computedStatus === "completed").length;
+  const dueCount = recordsWithStatus.filter((r) => r.computedStatus === "due").length;
+  const overdueCount = recordsWithStatus.filter((r) => r.computedStatus === "overdue").length;
+
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName[0]}${lastName[0]}`.toUpperCase();
   };
+
+  const onSubmit = handleSubmit(async (data) => {
+    if (!user?.id) return;
+    await createImmunization.mutateAsync({
+      patient_id: data.patient_id,
+      vaccine_name: data.vaccine_name,
+      administered_by: user.id,
+      batch_number: data.batch_number || null,
+      next_dose_date: data.next_dose_date || null,
+      notes: data.notes || null,
+    });
+    reset();
+    setPatientSearch("");
+    setIsDialogOpen(false);
+  });
 
   return (
     <AppLayout title="Immunization" subtitle="Vaccination records and schedules">
@@ -135,7 +131,7 @@ const Immunization = () => {
                 <Syringe className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{mockRecords.length}</p>
+                <p className="text-2xl font-bold">{immunizations.length}</p>
                 <p className="text-sm text-muted-foreground">Total Records</p>
               </div>
             </CardContent>
@@ -206,10 +202,88 @@ const Immunization = () => {
                 <Download className="h-4 w-4" />
                 Export
               </Button>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Record
-              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add Record
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Immunization Record</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={onSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Search Patient *</Label>
+                      <Input
+                        placeholder="Type to search patients..."
+                        value={patientSearch}
+                        onChange={(e) => setPatientSearch(e.target.value)}
+                      />
+                      {patientSearch && patients.length > 0 && (
+                        <div className="max-h-32 overflow-y-auto rounded border bg-background">
+                          {patients.slice(0, 5).map((patient) => (
+                            <button
+                              key={patient.id}
+                              type="button"
+                              className={cn(
+                                "w-full px-3 py-2 text-left text-sm hover:bg-muted",
+                                selectedPatientId === patient.id && "bg-primary/10"
+                              )}
+                              onClick={() => {
+                                setValue("patient_id", patient.id);
+                                setPatientSearch(`${patient.first_name} ${patient.last_name}`);
+                              }}
+                            >
+                              <p className="font-medium">{patient.first_name} {patient.last_name}</p>
+                              <p className="text-xs text-muted-foreground">{patient.student_id}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Vaccine *</Label>
+                      <Select onValueChange={(val) => setValue("vaccine_name", val)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vaccine" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vaccines.map((vaccine) => (
+                            <SelectItem key={vaccine} value={vaccine}>
+                              {vaccine}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="batch_number">Batch Number</Label>
+                        <Input id="batch_number" {...register("batch_number")} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="next_dose_date">Next Dose Date</Label>
+                        <Input id="next_dose_date" type="date" {...register("next_dose_date")} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea id="notes" rows={2} {...register("notes")} />
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createImmunization.isPending || !selectedPatientId}>
+                        {createImmunization.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Add Record
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
 
@@ -219,67 +293,77 @@ const Immunization = () => {
                 <CardTitle>Vaccination Records</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Patient</TableHead>
-                        <TableHead>Vaccine</TableHead>
-                        <TableHead>Date Administered</TableHead>
-                        <TableHead>Administered By</TableHead>
-                        <TableHead>Next Dose</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredRecords.map((record) => {
-                        const status = statusConfig[record.status];
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : recordsWithStatus.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Syringe className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-lg font-medium">No immunization records</p>
+                    <p className="text-muted-foreground">Add your first vaccination record to get started</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Patient</TableHead>
+                          <TableHead>Vaccine</TableHead>
+                          <TableHead>Date Administered</TableHead>
+                          <TableHead>Next Dose</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recordsWithStatus.map((record) => {
+                          const status = statusConfig[record.computedStatus];
 
-                        return (
-                          <TableRow key={record.id} className="cursor-pointer hover:bg-muted/50">
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-9 w-9">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                    {getInitials(record.patientName)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium">{record.patientName}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {record.studentId}
-                                  </p>
+                          return (
+                            <TableRow key={record.id} className="cursor-pointer hover:bg-muted/50">
+                              <TableCell>
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-9 w-9">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                      {getInitials(record.patients.first_name, record.patients.last_name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="font-medium">
+                                      {record.patients.first_name} {record.patients.last_name}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {record.patients.student_id}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <p className="font-medium">{record.vaccineName}</p>
-                              {record.batchNumber && (
-                                <p className="text-sm text-muted-foreground">
-                                  Batch: {record.batchNumber}
-                                </p>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {record.dateAdministered
-                                ? new Date(record.dateAdministered).toLocaleDateString()
-                                : "-"}
-                            </TableCell>
-                            <TableCell>{record.administeredBy || "-"}</TableCell>
-                            <TableCell>
-                              {record.nextDoseDate
-                                ? new Date(record.nextDoseDate).toLocaleDateString()
-                                : "N/A"}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={status.color}>{status.label}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                              </TableCell>
+                              <TableCell>
+                                <p className="font-medium">{record.vaccine_name}</p>
+                                {record.batch_number && (
+                                  <p className="text-sm text-muted-foreground">
+                                    Batch: {record.batch_number}
+                                  </p>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(record.date_administered).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                {record.next_dose_date
+                                  ? new Date(record.next_dose_date).toLocaleDateString()
+                                  : "N/A"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={status.color}>{status.label}</Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -292,9 +376,18 @@ const Immunization = () => {
                   Immunization Schedule
                 </p>
                 <p className="text-muted-foreground text-center max-w-md">
-                  View and manage vaccination schedules. Send reminders to students for
-                  upcoming doses.
+                  View upcoming vaccinations and send reminders to students.
                 </p>
+                {(dueCount > 0 || overdueCount > 0) && (
+                  <div className="mt-4 space-y-2">
+                    {overdueCount > 0 && (
+                      <p className="text-destructive font-medium">{overdueCount} overdue vaccinations</p>
+                    )}
+                    {dueCount > 0 && (
+                      <p className="text-warning font-medium">{dueCount} vaccinations due soon</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
