@@ -98,3 +98,29 @@ export function useRemoveFromQueue() {
     },
   });
 }
+
+// Alias for consistent naming
+export const useQueueEntries = useQueue;
+
+export function useUpdateQueueStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { data, error } = await supabase
+        .from("queue_entries")
+        .update({ status })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+    onError: (error) => {
+      toast.error(`Failed to update queue status: ${error.message}`);
+    },
+  });
+}

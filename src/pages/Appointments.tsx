@@ -29,51 +29,30 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
-  Filter,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppointments, useCreateAppointment, useCancelAppointment, AppointmentWithPatient } from "@/hooks/useAppointments";
+import { usePatients } from "@/hooks/usePatients";
+import { useAuth } from "@/contexts/AuthContext";
+import { useForm } from "react-hook-form";
+import { format, addDays, subDays } from "date-fns";
 
-interface TimeSlot {
-  time: string;
-  available: boolean;
-  appointment?: {
-    id: string;
-    patientName: string;
-    type: string;
-    status: "scheduled" | "confirmed" | "completed" | "cancelled";
-  };
-}
+const appointmentTypes = [
+  { value: "general", label: "General Checkup" },
+  { value: "follow_up", label: "Follow-up" },
+  { value: "immunization", label: "Immunization" },
+  { value: "fitness_exam", label: "Medical Fitness" },
+  { value: "specialist", label: "Specialist" },
+];
 
-const generateTimeSlots = (): TimeSlot[] => {
-  const slots: TimeSlot[] = [];
-  const times = [
-    "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
-    "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "02:00 PM", "02:30 PM",
-    "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
-  ];
+const timeSlots = [
+  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
+  "11:00", "11:30", "12:00", "12:30", "14:00", "14:30",
+  "15:00", "15:30", "16:00", "16:30",
+];
 
-  const appointments = [
-    { time: "08:30 AM", patientName: "Adebayo Oluwaseun", type: "General Checkup", status: "confirmed" as const },
-    { time: "09:30 AM", patientName: "Chiamaka Okonkwo", type: "Follow-up", status: "confirmed" as const },
-    { time: "10:30 AM", patientName: "Emmanuel Nwosu", type: "Immunization", status: "scheduled" as const },
-    { time: "11:30 AM", patientName: "Fatima Abubakar", type: "Medical Fitness", status: "scheduled" as const },
-    { time: "02:00 PM", patientName: "Grace Okafor", type: "General Checkup", status: "scheduled" as const },
-    { time: "03:30 PM", patientName: "Ibrahim Mohammed", type: "Specialist", status: "scheduled" as const },
-  ];
-
-  times.forEach((time) => {
-    const apt = appointments.find((a) => a.time === time);
-    slots.push({
-      time,
-      available: !apt,
-      appointment: apt ? { id: Math.random().toString(), ...apt } : undefined,
-    });
-  });
-
-  return slots;
-};
-
-const statusColors = {
+const statusColors: Record<string, string> = {
   scheduled: "bg-muted text-muted-foreground border-muted",
   confirmed: "bg-success/20 text-success border-success/30",
   completed: "bg-info/20 text-info border-info/30",
@@ -82,17 +61,78 @@ const statusColors = {
 
 const Appointments = () => {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedDoctor, setSelectedDoctor] = useState("dr-johnson");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const timeSlots = generateTimeSlots();
+  const [patientSearch, setPatientSearch] = useState("");
+  const { user } = useAuth();
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-US", {
+  const selectedDate = date ? format(date, "yyyy-MM-dd") : undefined;
+  const { data: appointments = [], isLoading } = useAppointments(selectedDate);
+  const { data: patients = [] } = usePatients(patientSearch);
+  
+  const createAppointment = useCreateAppointment();
+  const cancelAppointment = useCancelAppointment();
+
+  const { register, handleSubmit, reset, setValue, watch } = useForm({
+    defaultValues: {
+      patient_id: "",
+      appointment_date: "",
+      appointment_time: "",
+      type: "",
+      reason: "",
+    },
+  });
+
+  const selectedPatientId = watch("patient_id");
+
+  const onSubmit = handleSubmit(async (data) => {
+    if (!user?.id) return;
+    await createAppointment.mutateAsync({
+      patient_id: data.patient_id,
+      doctor_id: user.id,
+      appointment_date: data.appointment_date,
+      appointment_time: data.appointment_time,
+      type: data.type,
+      reason: data.reason || null,
+      status: "scheduled",
+    });
+    reset();
+    setIsDialogOpen(false);
+  });
+
+  const formatDisplayDate = (d: Date) =>
+    d.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
     });
+
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  // Create a map of booked time slots
+  const bookedSlots = new Map<string, AppointmentWithPatient>();
+  appointments.forEach((apt) => {
+    const timeKey = apt.appointment_time.slice(0, 5);
+    bookedSlots.set(timeKey, apt);
+  });
+
+  const goToPreviousDay = () => {
+    if (date) setDate(subDays(date, 1));
+  };
+
+  const goToNextDay = () => {
+    if (date) setDate(addDays(date, 1));
+  };
+
+  const totalSlots = timeSlots.length;
+  const bookedCount = appointments.filter((a) => a.status !== "cancelled").length;
+  const availableCount = totalSlots - bookedCount;
 
   return (
     <AppLayout title="Appointments" subtitle="Schedule and manage patient appointments">
@@ -112,61 +152,20 @@ const Appointments = () => {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Filters</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Doctor</Label>
-                <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="dr-johnson">Dr. Johnson</SelectItem>
-                    <SelectItem value="dr-adeyemi">Dr. Adeyemi</SelectItem>
-                    <SelectItem value="dr-obi">Dr. Obi</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Appointment Type</Label>
-                <Select defaultValue="all">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="general">General Checkup</SelectItem>
-                    <SelectItem value="follow_up">Follow-up</SelectItem>
-                    <SelectItem value="immunization">Immunization</SelectItem>
-                    <SelectItem value="fitness">Medical Fitness</SelectItem>
-                    <SelectItem value="specialist">Specialist</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Today's Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Slots</span>
-                <span className="font-medium">{timeSlots.length}</span>
+                <span className="font-medium">{totalSlots}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Booked</span>
-                <span className="font-medium text-primary">
-                  {timeSlots.filter((s) => !s.available).length}
-                </span>
+                <span className="font-medium text-primary">{bookedCount}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Available</span>
-                <span className="font-medium text-success">
-                  {timeSlots.filter((s) => s.available).length}
-                </span>
+                <span className="font-medium text-success">{availableCount}</span>
               </div>
             </CardContent>
           </Card>
@@ -177,13 +176,13 @@ const Appointments = () => {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" onClick={goToPreviousDay}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <h2 className="text-lg font-semibold">
-                {date ? formatDate(date) : "Select a date"}
+                {date ? formatDisplayDate(date) : "Select a date"}
               </h2>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" onClick={goToNextDay}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -201,28 +200,57 @@ const Appointments = () => {
                     Schedule a new appointment for a patient.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
+                <form onSubmit={onSubmit} className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Patient ID</Label>
-                    <Input placeholder="MTU/2024/0000" />
+                    <Label>Search Patient</Label>
+                    <Input
+                      placeholder="Type to search patients..."
+                      value={patientSearch}
+                      onChange={(e) => setPatientSearch(e.target.value)}
+                    />
+                    {patientSearch && patients.length > 0 && (
+                      <div className="max-h-32 overflow-y-auto rounded border bg-background">
+                        {patients.slice(0, 5).map((patient) => (
+                          <button
+                            key={patient.id}
+                            type="button"
+                            className={cn(
+                              "w-full px-3 py-2 text-left text-sm hover:bg-muted",
+                              selectedPatientId === patient.id && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              setValue("patient_id", patient.id);
+                              setPatientSearch(`${patient.first_name} ${patient.last_name}`);
+                            }}
+                          >
+                            <p className="font-medium">{patient.first_name} {patient.last_name}</p>
+                            <p className="text-xs text-muted-foreground">{patient.student_id}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Date</Label>
-                      <Input type="date" />
+                      <Input
+                        type="date"
+                        {...register("appointment_date", { required: true })}
+                        defaultValue={selectedDate}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Time</Label>
-                      <Select>
+                      <Select onValueChange={(val) => setValue("appointment_time", val)}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select time" />
                         </SelectTrigger>
                         <SelectContent>
                           {timeSlots
-                            .filter((s) => s.available)
+                            .filter((t) => !bookedSlots.has(t))
                             .map((slot) => (
-                              <SelectItem key={slot.time} value={slot.time}>
-                                {slot.time}
+                              <SelectItem key={slot} value={slot}>
+                                {formatTime(slot)}
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -231,45 +259,36 @@ const Appointments = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Appointment Type</Label>
-                    <Select>
+                    <Select onValueChange={(val) => setValue("type", val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="general">General Checkup</SelectItem>
-                        <SelectItem value="follow_up">Follow-up</SelectItem>
-                        <SelectItem value="immunization">Immunization</SelectItem>
-                        <SelectItem value="fitness">Medical Fitness</SelectItem>
-                        <SelectItem value="specialist">Specialist</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Doctor</Label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select doctor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dr-johnson">Dr. Johnson</SelectItem>
-                        <SelectItem value="dr-adeyemi">Dr. Adeyemi</SelectItem>
-                        <SelectItem value="dr-obi">Dr. Obi</SelectItem>
+                        {appointmentTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Reason for Visit</Label>
-                    <Textarea placeholder="Brief description of the reason for visit" />
+                    <Textarea
+                      placeholder="Brief description of the reason for visit"
+                      {...register("reason")}
+                    />
                   </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={() => setIsDialogOpen(false)}>
-                    Book Appointment
-                  </Button>
-                </DialogFooter>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={createAppointment.isPending || !selectedPatientId}>
+                      {createAppointment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Book Appointment
+                    </Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
             </Dialog>
           </div>
@@ -280,7 +299,7 @@ const Appointments = () => {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5 text-primary" />
-                  Dr. Johnson's Schedule
+                  Schedule
                 </CardTitle>
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-2">
@@ -295,51 +314,82 @@ const Appointments = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {timeSlots.map((slot) => (
-                  <div
-                    key={slot.time}
-                    className={cn(
-                      "rounded-lg border p-4 transition-all",
-                      slot.available
-                        ? "border-dashed border-success/50 bg-success/5 hover:border-success hover:bg-success/10 cursor-pointer"
-                        : "border-primary/30 bg-primary/5"
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{slot.time}</span>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {timeSlots.map((slot) => {
+                    const appointment = bookedSlots.get(slot);
+                    const isBooked = !!appointment && appointment.status !== "cancelled";
+
+                    return (
+                      <div
+                        key={slot}
+                        className={cn(
+                          "rounded-lg border p-4 transition-all",
+                          !isBooked
+                            ? "border-dashed border-success/50 bg-success/5 hover:border-success hover:bg-success/10 cursor-pointer"
+                            : "border-primary/30 bg-primary/5"
+                        )}
+                        onClick={() => {
+                          if (!isBooked) {
+                            setValue("appointment_time", slot);
+                            setValue("appointment_date", selectedDate || "");
+                            setIsDialogOpen(true);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{formatTime(slot)}</span>
+                          </div>
+                          {!isBooked ? (
+                            <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                              Open
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className={statusColors[appointment.status]}
+                            >
+                              {appointment.status}
+                            </Badge>
+                          )}
+                        </div>
+                        {isBooked && appointment && (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">
+                              {appointment.patients.first_name} {appointment.patients.last_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {appointmentTypes.find((t) => t.value === appointment.type)?.label || appointment.type}
+                            </p>
+                            {appointment.status === "scheduled" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelAppointment.mutate(appointment.id);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {!isBooked && (
+                          <p className="text-sm text-success">Click to book</p>
+                        )}
                       </div>
-                      {slot.available ? (
-                        <Badge variant="outline" className="bg-success/20 text-success border-success/30">
-                          Open
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className={statusColors[slot.appointment!.status]}
-                        >
-                          {slot.appointment!.status}
-                        </Badge>
-                      )}
-                    </div>
-                    {slot.appointment && (
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">
-                          {slot.appointment.patientName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {slot.appointment.type}
-                        </p>
-                      </div>
-                    )}
-                    {slot.available && (
-                      <p className="text-sm text-success">Click to book</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
