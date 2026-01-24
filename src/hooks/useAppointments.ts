@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export type Appointment = Tables<"appointments">;
 export type AppointmentInsert = TablesInsert<"appointments">;
@@ -15,6 +16,31 @@ export interface AppointmentWithPatient extends Appointment {
 }
 
 export function useAppointments(date?: string) {
+  const queryClient = useQueryClient();
+
+  // Set up real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel("appointment-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+        },
+        () => {
+          // Refetch appointments data when any change occurs
+          queryClient.invalidateQueries({ queryKey: ["appointments"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["appointments", date],
     queryFn: async () => {

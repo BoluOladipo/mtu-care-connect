@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export type QueueEntry = Tables<"queue_entries">;
 export type QueueEntryInsert = TablesInsert<"queue_entries">;
@@ -15,6 +16,31 @@ export interface QueueEntryWithPatient extends QueueEntry {
 }
 
 export function useQueue() {
+  const queryClient = useQueryClient();
+
+  // Set up real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel("queue-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "queue_entries",
+        },
+        () => {
+          // Refetch queue data when any change occurs
+          queryClient.invalidateQueries({ queryKey: ["queue"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return useQuery({
     queryKey: ["queue"],
     queryFn: async () => {

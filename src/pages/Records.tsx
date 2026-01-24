@@ -28,89 +28,19 @@ import {
   Calendar,
   User,
   Activity,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
-
-const mockMedicalRecords = [
-  {
-    id: "1",
-    patientName: "Adebayo Johnson",
-    studentId: "MTU/2021/001",
-    recordType: "Consultation",
-    date: "2024-01-15",
-    doctor: "Dr. Okonkwo",
-    summary: "Malaria treatment - Artemether prescribed",
-  },
-  {
-    id: "2",
-    patientName: "Chioma Obi",
-    studentId: "MTU/2022/045",
-    recordType: "Lab Result",
-    date: "2024-01-14",
-    doctor: "Dr. Adeyemi",
-    summary: "Blood test - Normal CBC values",
-  },
-  {
-    id: "3",
-    patientName: "Emmanuel Nwosu",
-    studentId: "MTU/2020/112",
-    recordType: "Immunization",
-    date: "2024-01-13",
-    doctor: "Nurse Fatima",
-    summary: "Hepatitis B vaccination - Dose 2",
-  },
-  {
-    id: "4",
-    patientName: "Fatima Ahmed",
-    studentId: "MTU/2023/078",
-    recordType: "Fitness Cert",
-    date: "2024-01-12",
-    doctor: "Dr. Okonkwo",
-    summary: "Medical fitness certificate issued",
-  },
-];
-
-const mockFitnessCerts = [
-  {
-    id: "1",
-    studentName: "Adebayo Johnson",
-    studentId: "MTU/2021/001",
-    issueDate: "2024-01-10",
-    expiryDate: "2025-01-10",
-    status: "valid",
-    examiner: "Dr. Okonkwo",
-  },
-  {
-    id: "2",
-    studentName: "Chioma Obi",
-    studentId: "MTU/2022/045",
-    issueDate: "2023-09-15",
-    expiryDate: "2024-09-15",
-    status: "valid",
-    examiner: "Dr. Adeyemi",
-  },
-  {
-    id: "3",
-    studentName: "David Eze",
-    studentId: "MTU/2019/034",
-    issueDate: "2023-02-20",
-    expiryDate: "2024-02-20",
-    status: "expired",
-    examiner: "Dr. Okonkwo",
-  },
-];
+import { useRecordStats, useMedicalRecords, useFitnessCertificates } from "@/hooks/useRecords";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Records = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [recordType, setRecordType] = useState("all");
 
-  const filteredRecords = mockMedicalRecords.filter((record) => {
-    const matchesSearch =
-      record.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.studentId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = recordType === "all" || record.recordType.toLowerCase().includes(recordType.toLowerCase());
-    return matchesSearch && matchesType;
-  });
+  const { data: stats, isLoading: statsLoading } = useRecordStats();
+  const { data: records, isLoading: recordsLoading } = useMedicalRecords(searchTerm, recordType);
+  const { data: fitnessCerts, isLoading: certsLoading } = useFitnessCertificates();
 
   const getRecordTypeBadge = (type: string) => {
     switch (type) {
@@ -120,7 +50,7 @@ const Records = () => {
         return <Badge className="bg-info/10 text-info hover:bg-info/20">{type}</Badge>;
       case "Immunization":
         return <Badge className="bg-success/10 text-success hover:bg-success/20">{type}</Badge>;
-      case "Fitness Cert":
+      case "Prescription":
         return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">{type}</Badge>;
       default:
         return <Badge variant="outline">{type}</Badge>;
@@ -148,7 +78,11 @@ const Records = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Records</p>
-                  <p className="text-2xl font-bold">12,450</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{stats?.totalRecords.toLocaleString() || 0}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -161,7 +95,11 @@ const Records = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Active Patients</p>
-                  <p className="text-2xl font-bold">3,280</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{stats?.activePatients.toLocaleString() || 0}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -174,7 +112,11 @@ const Records = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Valid Fitness Certs</p>
-                  <p className="text-2xl font-bold">2,890</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{stats?.validFitnessCerts.toLocaleString() || 0}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -187,7 +129,11 @@ const Records = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Expiring Soon</p>
-                  <p className="text-2xl font-bold">45</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <p className="text-2xl font-bold">{stats?.expiringSoon || 0}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -228,7 +174,6 @@ const Records = () => {
                       <SelectItem value="consultation">Consultation</SelectItem>
                       <SelectItem value="lab">Lab Result</SelectItem>
                       <SelectItem value="immunization">Immunization</SelectItem>
-                      <SelectItem value="fitness">Fitness Cert</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -247,30 +192,46 @@ const Records = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRecords.map((record) => (
-                        <TableRow key={record.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{record.patientName}</p>
-                              <p className="text-sm text-muted-foreground">{record.studentId}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{getRecordTypeBadge(record.recordType)}</TableCell>
-                          <TableCell>{record.date}</TableCell>
-                          <TableCell>{record.doctor}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">{record.summary}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
+                      {recordsLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                            <p className="text-muted-foreground mt-2">Loading records...</p>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : records && records.length > 0 ? (
+                        records.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{record.patientName}</p>
+                                <p className="text-sm text-muted-foreground">{record.studentId}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getRecordTypeBadge(record.recordType)}</TableCell>
+                            <TableCell>{record.date}</TableCell>
+                            <TableCell>{record.provider}</TableCell>
+                            <TableCell className="max-w-[200px] truncate">{record.summary}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm">
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-muted-foreground">No medical records found</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -297,30 +258,46 @@ const Records = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {mockFitnessCerts.map((cert) => (
-                        <TableRow key={cert.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{cert.studentName}</p>
-                              <p className="text-sm text-muted-foreground">{cert.studentId}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{cert.issueDate}</TableCell>
-                          <TableCell>{cert.expiryDate}</TableCell>
-                          <TableCell>{cert.examiner}</TableCell>
-                          <TableCell>{getStatusBadge(cert.status)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
+                      {certsLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                            <p className="text-muted-foreground mt-2">Loading certificates...</p>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : fitnessCerts && fitnessCerts.length > 0 ? (
+                        fitnessCerts.map((cert) => (
+                          <TableRow key={cert.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{cert.studentName}</p>
+                                <p className="text-sm text-muted-foreground">{cert.studentId}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{cert.issueDate}</TableCell>
+                            <TableCell>{cert.expiryDate}</TableCell>
+                            <TableCell>{cert.examiner}</TableCell>
+                            <TableCell>{getStatusBadge(cert.status)}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm">
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-muted-foreground">No fitness certificates found</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
