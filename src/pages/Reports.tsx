@@ -1,7 +1,6 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -30,46 +29,17 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
   LineChart,
   Line,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts";
-
-const visitData = [
-  { month: "Jan", visits: 420 },
-  { month: "Feb", visits: 380 },
-  { month: "Mar", visits: 510 },
-  { month: "Apr", visits: 450 },
-  { month: "May", visits: 390 },
-  { month: "Jun", visits: 480 },
-];
-
-const diagnosisData = [
-  { name: "Malaria", count: 145, color: "hsl(var(--primary))" },
-  { name: "Typhoid", count: 89, color: "hsl(var(--info))" },
-  { name: "Respiratory", count: 76, color: "hsl(var(--success))" },
-  { name: "Gastritis", count: 54, color: "hsl(var(--warning))" },
-  { name: "Others", count: 120, color: "hsl(var(--muted-foreground))" },
-];
-
-const drugUsageData = [
-  { drug: "Paracetamol", usage: 850 },
-  { drug: "Amoxicillin", usage: 620 },
-  { drug: "Artemether", usage: 480 },
-  { drug: "Omeprazole", usage: 390 },
-  { drug: "Metronidazole", usage: 320 },
-];
-
-const weeklyTrendData = [
-  { day: "Mon", patients: 45 },
-  { day: "Tue", patients: 52 },
-  { day: "Wed", patients: 48 },
-  { day: "Thu", patients: 61 },
-  { day: "Fri", patients: 55 },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useReportStats,
+  useMonthlyVisits,
+  useTopDiagnoses,
+  useWeeklyTrend,
+  useTopDrugUsage,
+} from "@/hooks/useReports";
 
 const chartConfig = {
   visits: { label: "Visits", color: "hsl(var(--primary))" },
@@ -78,6 +48,16 @@ const chartConfig = {
 };
 
 const Reports = () => {
+  const { data: stats, isLoading: statsLoading } = useReportStats();
+  const { data: monthlyVisits, isLoading: visitsLoading } = useMonthlyVisits();
+  const { data: diagnoses, isLoading: diagnosesLoading } = useTopDiagnoses();
+  const { data: weeklyTrend, isLoading: weeklyLoading } = useWeeklyTrend();
+  const { data: drugUsage, isLoading: drugsLoading } = useTopDrugUsage();
+
+  const maxDiagnosisCount = diagnoses && diagnoses.length > 0 
+    ? Math.max(...diagnoses.map(d => d.count)) 
+    : 1;
+
   return (
     <AppLayout title="Reports & Analytics" subtitle="View clinic performance metrics and trends">
       <div className="space-y-6">
@@ -134,8 +114,16 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Visits</p>
-                  <p className="text-2xl font-bold">2,630</p>
-                  <p className="text-xs text-success">+12% from last month</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">{stats?.totalVisits.toLocaleString() || 0}</p>
+                      <p className={`text-xs ${stats?.visitChange && stats.visitChange >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {stats?.visitChange && stats.visitChange >= 0 ? '+' : ''}{stats?.visitChange || 0}% from last month
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -148,8 +136,14 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Avg. Daily Visits</p>
-                  <p className="text-2xl font-bold">87</p>
-                  <p className="text-xs text-muted-foreground">Based on 30 days</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">{stats?.avgDailyVisits || 0}</p>
+                      <p className="text-xs text-muted-foreground">Based on this month</p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -162,8 +156,16 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Vaccinations</p>
-                  <p className="text-2xl font-bold">156</p>
-                  <p className="text-xs text-success">+8% from last month</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">{stats?.vaccinations || 0}</p>
+                      <p className={`text-xs ${stats?.vaccinationChange && stats.vaccinationChange >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {stats?.vaccinationChange && stats.vaccinationChange >= 0 ? '+' : ''}{stats?.vaccinationChange || 0}% from last month
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -176,8 +178,14 @@ const Reports = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Drugs Dispensed</p>
-                  <p className="text-2xl font-bold">3,420</p>
-                  <p className="text-xs text-muted-foreground">Units this month</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">{stats?.drugsDispensed.toLocaleString() || 0}</p>
+                      <p className="text-xs text-muted-foreground">Units this month</p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -196,15 +204,23 @@ const Reports = () => {
               <CardDescription>Patient visits over the last 6 months</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[300px]">
-                <BarChart data={visitData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="visits" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
+              {visitsLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : monthlyVisits && monthlyVisits.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-[300px]">
+                  <BarChart data={monthlyVisits}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="visits" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                  No visit data available
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -218,25 +234,37 @@ const Reports = () => {
               <CardDescription>Top diagnoses this month</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {diagnosisData.map((item) => (
-                  <div key={item.name} className="flex items-center gap-4">
-                    <div className="w-24 text-sm font-medium">{item.name}</div>
-                    <div className="flex-1">
-                      <div className="h-3 rounded-full bg-muted">
-                        <div
-                          className="h-3 rounded-full"
-                          style={{
-                            width: `${(item.count / 145) * 100}%`,
-                            backgroundColor: item.color,
-                          }}
-                        />
+              {diagnosesLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-6 w-full" />
+                  ))}
+                </div>
+              ) : diagnoses && diagnoses.length > 0 ? (
+                <div className="space-y-4">
+                  {diagnoses.map((item) => (
+                    <div key={item.name} className="flex items-center gap-4">
+                      <div className="w-24 text-sm font-medium truncate">{item.name}</div>
+                      <div className="flex-1">
+                        <div className="h-3 rounded-full bg-muted">
+                          <div
+                            className="h-3 rounded-full"
+                            style={{
+                              width: `${(item.count / maxDiagnosisCount) * 100}%`,
+                              backgroundColor: item.color,
+                            }}
+                          />
+                        </div>
                       </div>
+                      <div className="w-12 text-right text-sm font-medium">{item.count}</div>
                     </div>
-                    <div className="w-12 text-right text-sm font-medium">{item.count}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+                  No diagnosis data available
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -253,21 +281,29 @@ const Reports = () => {
               <CardDescription>Patients per day this week</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[300px]">
-                <LineChart data={weeklyTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="day" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line
-                    type="monotone"
-                    dataKey="patients"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={{ fill: "hsl(var(--primary))" }}
-                  />
-                </LineChart>
-              </ChartContainer>
+              {weeklyLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : weeklyTrend && weeklyTrend.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-[300px]">
+                  <LineChart data={weeklyTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="day" />
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line
+                      type="monotone"
+                      dataKey="patients"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ fill: "hsl(var(--primary))" }}
+                    />
+                  </LineChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                  No weekly data available
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -281,15 +317,23 @@ const Reports = () => {
               <CardDescription>Most dispensed medications</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[300px]">
-                <BarChart data={drugUsageData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
-                  <YAxis dataKey="drug" type="category" width={100} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="usage" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ChartContainer>
+              {drugsLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : drugUsage && drugUsage.length > 0 ? (
+                <ChartContainer config={chartConfig} className="h-[300px]">
+                  <BarChart data={drugUsage} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" />
+                    <YAxis dataKey="drug" type="category" width={100} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="usage" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                  No drug usage data available
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
