@@ -1,10 +1,10 @@
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { Bell, Search, Wifi, WifiOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, Wifi, WifiOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { NotificationsDropdown } from "@/components/notifications/NotificationsDropdown";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -13,7 +13,20 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   return (
     <SidebarProvider>
@@ -62,12 +75,7 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
             </Badge>
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-                3
-              </span>
-            </Button>
+            <NotificationsDropdown />
           </div>
         </header>
 
