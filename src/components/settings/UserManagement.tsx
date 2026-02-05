@@ -49,6 +49,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   pharmacist: "Pharmacist",
   lab_technician: "Lab Technician",
   receptionist: "Receptionist",
+  student: "Student",
 };
 
 const ROLE_COLORS: Record<AppRole, string> = {
@@ -58,6 +59,7 @@ const ROLE_COLORS: Record<AppRole, string> = {
   pharmacist: "bg-success/10 text-success",
   lab_technician: "bg-warning/10 text-warning",
   receptionist: "bg-muted text-muted-foreground",
+  student: "bg-secondary/10 text-secondary-foreground",
 };
 
 export function UserManagement() {
@@ -275,6 +277,7 @@ export function UserManagement() {
                 <SelectItem value="pharmacist">Pharmacist</SelectItem>
                 <SelectItem value="lab_technician">Lab Technician</SelectItem>
                 <SelectItem value="receptionist">Receptionist</SelectItem>
+                <SelectItem value="student">Student</SelectItem>
               </SelectContent>
             </Select>
           </div>

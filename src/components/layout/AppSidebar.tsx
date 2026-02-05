@@ -68,6 +68,7 @@ export function AppSidebar() {
     if (roles.includes("pharmacist")) return "Pharmacist";
     if (roles.includes("lab_technician")) return "Lab Technician";
     if (roles.includes("receptionist")) return "Receptionist";
+    if (roles.includes("student")) return "Student";
     return "Staff";
   };
 

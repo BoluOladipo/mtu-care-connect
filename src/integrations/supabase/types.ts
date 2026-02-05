@@ -117,6 +117,36 @@ export type Database = {
           },
         ]
       }
+      doctor_schedules: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          doctor_id: string
+          end_time: string
+          id: string
+          is_available: boolean
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          doctor_id: string
+          end_time: string
+          id?: string
+          is_available?: boolean
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          doctor_id?: string
+          end_time?: string
+          id?: string
+          is_available?: boolean
+          start_time?: string
+        }
+        Relationships: []
+      }
       drugs: {
         Row: {
           batch_number: string | null
@@ -309,6 +339,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          metadata: Json | null
+          read: boolean
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          read?: boolean
+          title: string
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       patients: {
         Row: {
@@ -612,6 +675,7 @@ export type Database = {
         | "pharmacist"
         | "lab_technician"
         | "receptionist"
+        | "student"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -746,6 +810,7 @@ export const Constants = {
         "pharmacist",
         "lab_technician",
         "receptionist",
+        "student",
       ],
     },
   },
