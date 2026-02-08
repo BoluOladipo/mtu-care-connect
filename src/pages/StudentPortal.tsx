@@ -4,7 +4,6 @@ import { Calendar, Clock, User, Stethoscope, CheckCircle, Loader2 } from "lucide
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -23,14 +22,17 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useDoctorsOnDuty, useAvailableTimeSlots } from "@/hooks/useDoctorSchedules";
-import { useCreateAppointment, useAppointments } from "@/hooks/useAppointments";
-import { usePatients } from "@/hooks/usePatients";
+import { useCreateAppointment } from "@/hooks/useAppointments";
+import { useStudentPatient, useStudentAppointments } from "@/hooks/useStudentPatient";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import StudentRegistrationForm from "@/components/student/StudentRegistrationForm";
+import StudentHeader from "@/components/student/StudentHeader";
+import StudentAppointmentsList from "@/components/student/StudentAppointmentsList";
 
 const StudentPortal = () => {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -39,26 +41,18 @@ const StudentPortal = () => {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
+  const { data: myPatientRecord, isLoading: loadingPatient, refetch: refetchPatient } = useStudentPatient();
   const { data: doctorsOnDuty, isLoading: loadingDoctors } = useDoctorsOnDuty(selectedDate);
   const { data: availableSlots, isLoading: loadingSlots } = useAvailableTimeSlots(
     selectedDoctor || "",
     selectedDate
   );
-  const { data: patients } = usePatients();
-  const { data: myAppointments } = useAppointments();
+  const { data: myAppointments } = useStudentAppointments(myPatientRecord?.id);
   const createAppointment = useCreateAppointment();
 
-  // Find student's patient record by email
-  const myPatientRecord = patients?.find((p) => p.email === user?.email);
-
-  // Filter to show only student's own appointments
-  const studentAppointments = myAppointments?.filter(
-    (apt) => apt.patient_id === myPatientRecord?.id
-  ) || [];
-
-  const upcomingAppointments = studentAppointments.filter(
+  const upcomingAppointments = myAppointments?.filter(
     (apt) => apt.status !== "cancelled" && apt.status !== "completed"
-  );
+  ) || [];
 
   const handleBookAppointment = async () => {
     if (!selectedDoctor || !selectedTime || !myPatientRecord) {
@@ -96,39 +90,36 @@ const StudentPortal = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Generate next 14 days for selection
   const availableDates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i));
+
+  if (loadingPatient) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show registration form if student doesn't have a patient record
+  if (!myPatientRecord) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+        <StudentHeader />
+        <main className="container mx-auto px-4 py-8">
+          <StudentRegistrationForm onRegistered={() => refetchPatient()} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Stethoscope className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-bold">MTU Clinic</h1>
-              <p className="text-xs text-muted-foreground">Student Portal</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              Welcome, {profile?.full_name || user?.email}
-            </span>
-            <Button variant="outline" size="sm" onClick={signOut}>
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <StudentHeader />
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column - Calendar & Doctors */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Welcome Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -140,15 +131,6 @@ const StudentPortal = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {!myPatientRecord && (
-                  <div className="mb-4 rounded-lg border border-warning bg-warning/10 p-4">
-                    <p className="text-sm text-warning-foreground">
-                      <strong>Note:</strong> Your student record was not found. Please visit the clinic 
-                      to register as a patient before booking appointments.
-                    </p>
-                  </div>
-                )}
-
                 {/* Date Selection */}
                 <div className="mb-6">
                   <Label className="mb-3 block">Select Date</Label>
@@ -205,7 +187,7 @@ const StudentPortal = () => {
                               {doctor.schedules[0] && (
                                 <p className="text-xs text-muted-foreground">
                                   <Clock className="mr-1 inline h-3 w-3" />
-                                  {formatTime(doctor.schedules[0].start_time)} - {formatTime(doctor.schedules[0].end_time)}
+                                  Available 24/7
                                 </p>
                               )}
                             </div>
@@ -259,7 +241,6 @@ const StudentPortal = () => {
                       className="w-full"
                       size="lg"
                       onClick={() => setIsBookingOpen(true)}
-                      disabled={!myPatientRecord}
                     >
                       Continue Booking
                     </Button>
@@ -269,63 +250,20 @@ const StudentPortal = () => {
             </Card>
           </div>
 
-          {/* Right Column - My Appointments */}
+          {/* Right Column */}
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  My Appointments
-                </CardTitle>
-                <CardDescription>Your upcoming clinic visits</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {upcomingAppointments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                    <p className="text-muted-foreground">No upcoming appointments</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {upcomingAppointments.map((apt) => (
-                      <div
-                        key={apt.id}
-                        className="rounded-lg border p-3 space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline">{apt.type}</Badge>
-                          <Badge
-                            variant={apt.status === "confirmed" ? "default" : "secondary"}
-                          >
-                            {apt.status}
-                          </Badge>
-                        </div>
-                        <p className="font-medium">
-                          {format(new Date(apt.appointment_date), "EEEE, MMM d")}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          <Clock className="mr-1 inline h-3 w-3" />
-                          {formatTime(apt.appointment_time)}
-                        </p>
-                        {apt.reason && (
-                          <p className="text-sm text-muted-foreground">{apt.reason}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <StudentAppointmentsList
+              appointments={upcomingAppointments}
+              formatTime={formatTime}
+            />
 
-            {/* Quick Info */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Clinic Hours</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>Monday - Friday: 8:00 AM - 5:00 PM</p>
-                <p>Saturday: 9:00 AM - 1:00 PM</p>
-                <p>Sunday: Closed</p>
+                <p className="font-medium text-foreground">Open 24/7</p>
+                <p>The clinic is open every day, round the clock.</p>
                 <p className="pt-2 text-xs">
                   For emergencies, please call the clinic hotline.
                 </p>
