@@ -53,23 +53,14 @@ export function useDoctorsOnDuty(date?: Date) {
         return [];
       }
 
-      // Get doctor profiles with their roles
-      const doctorIds = schedules.map((s) => s.doctor_id);
-      
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "doctor")
-        .in("user_id", doctorIds);
-
-      if (rolesError) throw rolesError;
-
-      const validDoctorIds = roles?.map((r) => r.user_id) || [];
+      // Get unique doctor IDs from schedules (no need to check user_roles —
+      // having a schedule implies they are a doctor, and this avoids RLS issues for students)
+      const doctorIds = [...new Set(schedules.map((s) => s.doctor_id))];
 
       const { data: profiles, error: profileError } = await supabase
         .from("profiles")
         .select("*")
-        .in("user_id", validDoctorIds);
+        .in("user_id", doctorIds);
 
       if (profileError) throw profileError;
 
