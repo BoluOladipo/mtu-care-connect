@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Select,
   SelectContent,
@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CalendarPlus,
+  Calendar,
   Clock,
   User,
   ChevronLeft,
@@ -32,7 +33,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAppointments, useCreateAppointment, useCancelAppointment, AppointmentWithPatient } from "@/hooks/useAppointments";
+import { useAppointments, useCreateAppointment, useCancelAppointment } from "@/hooks/useAppointments";
 import { usePatients } from "@/hooks/usePatients";
 import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
@@ -44,12 +45,6 @@ const appointmentTypes = [
   { value: "immunization", label: "Immunization" },
   { value: "fitness_exam", label: "Medical Fitness" },
   { value: "specialist", label: "Specialist" },
-];
-
-const timeSlots = [
-  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
-  "11:00", "11:30", "12:00", "12:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30",
 ];
 
 const statusColors: Record<string, string> = {
@@ -115,13 +110,6 @@ const Appointments = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Create a map of booked time slots
-  const bookedSlots = new Map<string, AppointmentWithPatient>();
-  appointments.forEach((apt) => {
-    const timeKey = apt.appointment_time.slice(0, 5);
-    bookedSlots.set(timeKey, apt);
-  });
-
   const goToPreviousDay = () => {
     if (date) setDate(subDays(date, 1));
   };
@@ -130,9 +118,7 @@ const Appointments = () => {
     if (date) setDate(addDays(date, 1));
   };
 
-  const totalSlots = timeSlots.length;
   const bookedCount = appointments.filter((a) => a.status !== "cancelled").length;
-  const availableCount = totalSlots - bookedCount;
 
   return (
     <AppLayout title="Appointments" subtitle="Schedule and manage patient appointments">
@@ -141,7 +127,7 @@ const Appointments = () => {
         <div className="space-y-6">
           <Card>
             <CardContent className="p-4">
-              <Calendar
+              <CalendarComponent
                 mode="single"
                 selected={date}
                 onSelect={setDate}
@@ -152,20 +138,18 @@ const Appointments = () => {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Today's Summary</CardTitle>
+              <CardTitle className="text-sm font-medium">Day Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Slots</span>
-                <span className="font-medium">{totalSlots}</span>
-              </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Booked</span>
                 <span className="font-medium text-primary">{bookedCount}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Available</span>
-                <span className="font-medium text-success">{availableCount}</span>
+                <span className="text-muted-foreground">Cancelled</span>
+                <span className="font-medium text-destructive">
+                  {appointments.filter((a) => a.status === "cancelled").length}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -241,20 +225,11 @@ const Appointments = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>Time</Label>
-                      <Select onValueChange={(val) => setValue("appointment_time", val)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {timeSlots
-                            .filter((t) => !bookedSlots.has(t))
-                            .map((slot) => (
-                              <SelectItem key={slot} value={slot}>
-                                {formatTime(slot)}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        type="time"
+                        step="1800"
+                        {...register("appointment_time", { required: true })}
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -293,7 +268,7 @@ const Appointments = () => {
             </Dialog>
           </div>
 
-          {/* Time Slots Grid */}
+          {/* Appointments List */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -301,16 +276,9 @@ const Appointments = () => {
                   <User className="h-5 w-5 text-primary" />
                   Schedule
                 </CardTitle>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-success" />
-                    <span className="text-muted-foreground">Available</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-primary" />
-                    <span className="text-muted-foreground">Booked</span>
-                  </div>
-                </div>
+                <Badge variant="outline">
+                  {bookedCount} appointment{bookedCount !== 1 ? "s" : ""}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent>
@@ -318,76 +286,64 @@ const Appointments = () => {
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
+              ) : appointments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Calendar className="mb-3 h-10 w-10 text-muted-foreground" />
+                  <p className="text-muted-foreground">No appointments for this day</p>
+                  <p className="text-sm text-muted-foreground">Click "New Appointment" to schedule one</p>
+                </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {timeSlots.map((slot) => {
-                    const appointment = bookedSlots.get(slot);
-                    const isBooked = !!appointment && appointment.status !== "cancelled";
-
-                    return (
-                      <div
-                        key={slot}
-                        className={cn(
-                          "rounded-lg border p-4 transition-all",
-                          !isBooked
-                            ? "border-dashed border-success/50 bg-success/5 hover:border-success hover:bg-success/10 cursor-pointer"
-                            : "border-primary/30 bg-primary/5"
-                        )}
-                        onClick={() => {
-                          if (!isBooked) {
-                            setValue("appointment_time", slot);
-                            setValue("appointment_date", selectedDate || "");
-                            setIsDialogOpen(true);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{formatTime(slot)}</span>
-                          </div>
-                          {!isBooked ? (
-                            <Badge variant="outline" className="bg-success/20 text-success border-success/30">
-                              Open
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className={statusColors[appointment.status]}
-                            >
-                              {appointment.status}
-                            </Badge>
-                          )}
+                <div className="space-y-3">
+                  {appointments.map((appointment) => (
+                    <div
+                      key={appointment.id}
+                      className={cn(
+                        "rounded-lg border p-4 transition-all",
+                        appointment.status === "cancelled"
+                          ? "opacity-50"
+                          : "border-primary/30 bg-primary/5"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{formatTime(appointment.appointment_time)}</span>
                         </div>
-                        {isBooked && appointment && (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">
-                              {appointment.patients.first_name} {appointment.patients.last_name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {appointmentTypes.find((t) => t.value === appointment.type)?.label || appointment.type}
-                            </p>
-                            {appointment.status === "scheduled" && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  cancelAppointment.mutate(appointment.id);
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                            )}
-                          </div>
+                        <Badge
+                          variant="outline"
+                          className={statusColors[appointment.status]}
+                        >
+                          {appointment.status}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          {appointment.patients.first_name} {appointment.patients.last_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {appointmentTypes.find((t) => t.value === appointment.type)?.label || appointment.type}
+                        </p>
+                        {appointment.reason && (
+                          <p className="text-xs text-muted-foreground">
+                            Reason: {appointment.reason}
+                          </p>
                         )}
-                        {!isBooked && (
-                          <p className="text-sm text-success">Click to book</p>
+                        {appointment.status === "scheduled" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelAppointment.mutate(appointment.id);
+                            }}
+                          >
+                            Cancel
+                          </Button>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
