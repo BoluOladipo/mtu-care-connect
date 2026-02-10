@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
 
 export type Patient = Tables<"patients">;
 
@@ -27,6 +28,33 @@ export function useStudentPatient() {
 }
 
 export function useStudentAppointments(patientId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  // Real-time subscription for student appointments
+  useEffect(() => {
+    if (!patientId) return;
+
+    const channel = supabase
+      .channel("student-appointment-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "appointments",
+          filter: `patient_id=eq.${patientId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["student-appointments", patientId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [patientId, queryClient]);
+
   return useQuery({
     queryKey: ["student-appointments", patientId],
     queryFn: async () => {
