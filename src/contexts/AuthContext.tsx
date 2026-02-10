@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = (role: AppRole) => roles.includes(role);
 
-  const isStaff = () => roles.length > 0;
+  const isStaff = () => roles.length > 0 && !roles.every((r) => r === "student");
 
   return (
     <AuthContext.Provider
