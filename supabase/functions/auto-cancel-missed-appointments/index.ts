@@ -1,6 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-Deno.serve(async () => {
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -10,19 +19,33 @@ Deno.serve(async () => {
   const today = now.toISOString().split("T")[0];
   const currentTime = now.toTimeString().split(" ")[0]; // HH:MM:SS
 
-  // Cancel appointments that are scheduled but whose date/time has passed
-  const { data, error } = await supabase
+  // Cancel appointments from past dates
+  const { data: pastDate, error: err1 } = await supabase
     .from("appointments")
     .update({ status: "cancelled", notes: "Auto-cancelled: student missed appointment" })
     .eq("status", "scheduled")
-    .or(`appointment_date.lt.${today},and(appointment_date.eq.${today},appointment_time.lt.${currentTime})`)
+    .lt("appointment_date", today)
     .select("id");
 
-  if (error) {
-    console.error("Error cancelling missed appointments:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  // Cancel today's appointments where time has passed
+  const { data: pastTime, error: err2 } = await supabase
+    .from("appointments")
+    .update({ status: "cancelled", notes: "Auto-cancelled: student missed appointment" })
+    .eq("status", "scheduled")
+    .eq("appointment_date", today)
+    .lt("appointment_time", currentTime)
+    .select("id");
+
+  if (err1 || err2) {
+    console.error("Error:", err1 || err2);
+    return new Response(JSON.stringify({ error: (err1 || err2)?.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
-  console.log(`Auto-cancelled ${data?.length ?? 0} missed appointments`);
-  return new Response(JSON.stringify({ cancelled: data?.length ?? 0 }), { status: 200 });
+  const total = (pastDate?.length ?? 0) + (pastTime?.length ?? 0);
+  console.log(`Auto-cancelled ${total} missed appointments`);
+  return new Response(JSON.stringify({ cancelled: total }), {
+    status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 });
