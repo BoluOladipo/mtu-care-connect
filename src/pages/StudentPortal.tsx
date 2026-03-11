@@ -51,7 +51,7 @@ const StudentPortal = () => {
   const createAppointment = useCreateAppointment();
 
   const upcomingAppointments = myAppointments?.filter(
-    (apt) => apt.status !== "cancelled" && apt.status !== "completed"
+    (apt) => apt.status !== "cancelled" && apt.status !== "completed" && apt.status !== "attended"
   ) || [];
 
   const handleBookAppointment = async () => {
