@@ -68,6 +68,7 @@ const Appointments = () => {
   
   const createAppointment = useCreateAppointment();
   const cancelAppointment = useCancelAppointment();
+  const updateAppointment = useUpdateAppointment();
 
   const { register, handleSubmit, reset, setValue, watch } = useForm({
     defaultValues: {
