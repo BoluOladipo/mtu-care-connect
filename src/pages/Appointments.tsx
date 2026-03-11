@@ -302,7 +302,7 @@ const Appointments = () => {
                       key={appointment.id}
                       className={cn(
                         "rounded-lg border p-4 transition-all",
-                        appointment.status === "cancelled"
+                        appointment.status === "cancelled" || appointment.status === "missed"
                           ? "opacity-50"
                           : "border-primary/30 bg-primary/5"
                       )}
@@ -331,19 +331,52 @@ const Appointments = () => {
                             Reason: {appointment.reason}
                           </p>
                         )}
-                        {appointment.status === "scheduled" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              cancelAppointment.mutate(appointment.id);
-                            }}
-                          >
-                            Cancel
-                          </Button>
+                        {appointment.notes && (appointment.status === "missed" || appointment.status === "cancelled") && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Note: {appointment.notes}
+                          </p>
                         )}
+                        <div className="flex gap-2 mt-2">
+                          {appointment.status === "scheduled" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateAppointment.mutate({ id: appointment.id, status: "attended" });
+                                }}
+                              >
+                                Mark as Attended
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelAppointment.mutate(appointment.id);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          )}
+                          {appointment.status === "missed" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelAppointment.mutate(appointment.id);
+                              }}
+                            >
+                              Dismiss
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
