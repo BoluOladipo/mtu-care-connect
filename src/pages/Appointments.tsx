@@ -33,7 +33,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAppointments, useCreateAppointment, useCancelAppointment } from "@/hooks/useAppointments";
+import { useAppointments, useCreateAppointment, useCancelAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
 import { usePatients } from "@/hooks/usePatients";
 import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
@@ -51,6 +51,8 @@ const statusColors: Record<string, string> = {
   scheduled: "bg-muted text-muted-foreground border-muted",
   confirmed: "bg-success/20 text-success border-success/30",
   completed: "bg-info/20 text-info border-info/30",
+  attended: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300",
+  missed: "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300",
   cancelled: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
@@ -66,6 +68,7 @@ const Appointments = () => {
   
   const createAppointment = useCreateAppointment();
   const cancelAppointment = useCancelAppointment();
+  const updateAppointment = useUpdateAppointment();
 
   const { register, handleSubmit, reset, setValue, watch } = useForm({
     defaultValues: {
@@ -299,7 +302,7 @@ const Appointments = () => {
                       key={appointment.id}
                       className={cn(
                         "rounded-lg border p-4 transition-all",
-                        appointment.status === "cancelled"
+                        appointment.status === "cancelled" || appointment.status === "missed"
                           ? "opacity-50"
                           : "border-primary/30 bg-primary/5"
                       )}
@@ -328,19 +331,52 @@ const Appointments = () => {
                             Reason: {appointment.reason}
                           </p>
                         )}
-                        {appointment.status === "scheduled" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="mt-2 h-7 text-xs text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              cancelAppointment.mutate(appointment.id);
-                            }}
-                          >
-                            Cancel
-                          </Button>
+                        {appointment.notes && (appointment.status === "missed" || appointment.status === "cancelled") && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Note: {appointment.notes}
+                          </p>
                         )}
+                        <div className="flex gap-2 mt-2">
+                          {appointment.status === "scheduled" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateAppointment.mutate({ id: appointment.id, status: "attended" });
+                                }}
+                              >
+                                Mark as Attended
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelAppointment.mutate(appointment.id);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          )}
+                          {appointment.status === "missed" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelAppointment.mutate(appointment.id);
+                              }}
+                            >
+                              Dismiss
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

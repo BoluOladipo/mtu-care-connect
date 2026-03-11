@@ -51,7 +51,7 @@ const StudentPortal = () => {
   const createAppointment = useCreateAppointment();
 
   const upcomingAppointments = myAppointments?.filter(
-    (apt) => apt.status !== "cancelled" && apt.status !== "completed"
+    (apt) => apt.status !== "cancelled" && apt.status !== "completed" && apt.status !== "attended"
   ) || [];
 
   const handleBookAppointment = async () => {
@@ -187,7 +187,7 @@ const StudentPortal = () => {
                               {doctor.schedules[0] && (
                                 <p className="text-xs text-muted-foreground">
                                   <Clock className="mr-1 inline h-3 w-3" />
-                                  Available 24/7
+                                  {formatTime(doctor.schedules[0].start_time)} - {formatTime(doctor.schedules[0].end_time)}
                                 </p>
                               )}
                             </div>

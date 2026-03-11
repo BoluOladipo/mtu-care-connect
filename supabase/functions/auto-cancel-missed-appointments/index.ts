@@ -19,18 +19,18 @@ Deno.serve(async (req) => {
   const today = now.toISOString().split("T")[0];
   const currentTime = now.toTimeString().split(" ")[0]; // HH:MM:SS
 
-  // Cancel appointments from past dates
+  // Mark past-date appointments as "missed"
   const { data: pastDate, error: err1 } = await supabase
     .from("appointments")
-    .update({ status: "cancelled", notes: "Auto-cancelled: student missed appointment" })
+    .update({ status: "missed", notes: "Missed: student did not attend" })
     .eq("status", "scheduled")
     .lt("appointment_date", today)
     .select("id");
 
-  // Cancel today's appointments where time has passed
+  // Mark today's past-time appointments as "missed"
   const { data: pastTime, error: err2 } = await supabase
     .from("appointments")
-    .update({ status: "cancelled", notes: "Auto-cancelled: student missed appointment" })
+    .update({ status: "missed", notes: "Missed: student did not attend" })
     .eq("status", "scheduled")
     .eq("appointment_date", today)
     .lt("appointment_time", currentTime)
@@ -44,8 +44,8 @@ Deno.serve(async (req) => {
   }
 
   const total = (pastDate?.length ?? 0) + (pastTime?.length ?? 0);
-  console.log(`Auto-cancelled ${total} missed appointments`);
-  return new Response(JSON.stringify({ cancelled: total }), {
+  console.log(`Marked ${total} appointments as missed`);
+  return new Response(JSON.stringify({ missed: total }), {
     status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 });
