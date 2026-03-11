@@ -6,6 +6,7 @@ import {
   Shield,
   Bell,
   Calendar,
+  CalendarDays,
   Database,
 } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
@@ -14,12 +15,13 @@ import { RolesPermissions } from "@/components/settings/RolesPermissions";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { AppointmentSettings } from "@/components/settings/AppointmentSettings";
 import { SystemSettings } from "@/components/settings/SystemSettings";
+import { DoctorRoster } from "@/components/settings/DoctorRoster";
 
 const Settings = () => {
   return (
     <AppLayout title="Settings" subtitle="Configure system settings and manage users">
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:grid-cols-7">
           <TabsTrigger value="general" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -31,6 +33,10 @@ const Settings = () => {
           <TabsTrigger value="roles" className="gap-2">
             <Shield className="h-4 w-4" />
             <span className="hidden sm:inline">Roles</span>
+          </TabsTrigger>
+          <TabsTrigger value="roster" className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            <span className="hidden sm:inline">Roster</span>
           </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" />
@@ -52,6 +58,10 @@ const Settings = () => {
 
         <TabsContent value="users">
           <UserManagement />
+        </TabsContent>
+
+        <TabsContent value="roster">
+          <DoctorRoster />
         </TabsContent>
 
         <TabsContent value="roles">
