@@ -60,6 +60,10 @@ const Settings = () => {
           <UserManagement />
         </TabsContent>
 
+        <TabsContent value="roster">
+          <DoctorRoster />
+        </TabsContent>
+
         <TabsContent value="roles">
           <RolesPermissions />
         </TabsContent>
