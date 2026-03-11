@@ -33,7 +33,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAppointments, useCreateAppointment, useCancelAppointment } from "@/hooks/useAppointments";
+import { useAppointments, useCreateAppointment, useCancelAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
 import { usePatients } from "@/hooks/usePatients";
 import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
