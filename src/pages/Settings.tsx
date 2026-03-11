@@ -6,6 +6,7 @@ import {
   Shield,
   Bell,
   Calendar,
+  CalendarDays,
   Database,
 } from "lucide-react";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
@@ -14,6 +15,7 @@ import { RolesPermissions } from "@/components/settings/RolesPermissions";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { AppointmentSettings } from "@/components/settings/AppointmentSettings";
 import { SystemSettings } from "@/components/settings/SystemSettings";
+import { DoctorRoster } from "@/components/settings/DoctorRoster";
 
 const Settings = () => {
   return (
