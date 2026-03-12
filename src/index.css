@@ -2,32 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* MTU Clinic Management System - Orange & White Theme */
+/* MTU Clinic Management System - Mountain Top University Green & Purple Theme */
 
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 24 10% 10%;
+    --foreground: 150 10% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 24 10% 10%;
+    --card-foreground: 150 10% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 24 10% 10%;
+    --popover-foreground: 150 10% 10%;
 
-    /* Primary: Orange */
-    --primary: 24 95% 53%;
+    /* Primary: MTU Green */
+    --primary: 145 63% 42%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary: Light orange/cream */
-    --secondary: 30 100% 97%;
-    --secondary-foreground: 24 95% 40%;
+    /* Secondary: Light green */
+    --secondary: 145 40% 96%;
+    --secondary-foreground: 145 63% 30%;
 
-    --muted: 24 20% 95%;
-    --muted-foreground: 24 10% 45%;
+    --muted: 145 15% 95%;
+    --muted-foreground: 150 10% 45%;
 
-    --accent: 24 100% 95%;
-    --accent-foreground: 24 95% 40%;
+    --accent: 270 50% 95%;
+    --accent-foreground: 270 50% 35%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -38,57 +38,57 @@
 
     /* Warning yellow */
     --warning: 45 93% 47%;
-    --warning-foreground: 24 10% 10%;
+    --warning-foreground: 150 10% 10%;
 
     /* Info blue */
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
 
-    --border: 24 20% 90%;
-    --input: 24 20% 90%;
-    --ring: 24 95% 53%;
+    --border: 145 15% 90%;
+    --input: 145 15% 90%;
+    --ring: 145 63% 42%;
 
     --radius: 0.5rem;
 
-    /* Sidebar - White with orange accents */
+    /* Sidebar - White with green accents */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 24 10% 30%;
-    --sidebar-primary: 24 95% 53%;
+    --sidebar-foreground: 150 10% 30%;
+    --sidebar-primary: 145 63% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 24 100% 97%;
-    --sidebar-accent-foreground: 24 95% 40%;
-    --sidebar-border: 24 20% 92%;
-    --sidebar-ring: 24 95% 53%;
+    --sidebar-accent: 145 40% 96%;
+    --sidebar-accent-foreground: 145 63% 30%;
+    --sidebar-border: 145 15% 92%;
+    --sidebar-ring: 145 63% 42%;
 
     /* Chart colors for analytics */
-    --chart-1: 24 95% 53%;
-    --chart-2: 24 80% 65%;
+    --chart-1: 145 63% 42%;
+    --chart-2: 270 50% 55%;
     --chart-3: 142 76% 36%;
     --chart-4: 199 89% 48%;
     --chart-5: 45 93% 47%;
   }
 
   .dark {
-    --background: 24 10% 8%;
-    --foreground: 24 10% 95%;
+    --background: 150 10% 8%;
+    --foreground: 150 10% 95%;
 
-    --card: 24 10% 12%;
-    --card-foreground: 24 10% 95%;
+    --card: 150 10% 12%;
+    --card-foreground: 150 10% 95%;
 
-    --popover: 24 10% 12%;
-    --popover-foreground: 24 10% 95%;
+    --popover: 150 10% 12%;
+    --popover-foreground: 150 10% 95%;
 
-    --primary: 24 95% 53%;
+    --primary: 145 63% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 24 20% 18%;
-    --secondary-foreground: 24 95% 70%;
+    --secondary: 145 20% 18%;
+    --secondary-foreground: 145 63% 70%;
 
-    --muted: 24 15% 20%;
-    --muted-foreground: 24 10% 60%;
+    --muted: 150 15% 20%;
+    --muted-foreground: 150 10% 60%;
 
-    --accent: 24 30% 20%;
-    --accent-foreground: 24 95% 70%;
+    --accent: 270 30% 20%;
+    --accent-foreground: 270 50% 70%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 100%;
@@ -102,21 +102,21 @@
     --info: 199 60% 35%;
     --info-foreground: 0 0% 100%;
 
-    --border: 24 15% 20%;
-    --input: 24 15% 20%;
-    --ring: 24 95% 53%;
+    --border: 150 15% 20%;
+    --input: 150 15% 20%;
+    --ring: 145 63% 42%;
 
-    --sidebar-background: 24 10% 10%;
-    --sidebar-foreground: 24 10% 85%;
-    --sidebar-primary: 24 95% 53%;
+    --sidebar-background: 150 10% 10%;
+    --sidebar-foreground: 150 10% 85%;
+    --sidebar-primary: 145 63% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 24 20% 18%;
-    --sidebar-accent-foreground: 24 95% 70%;
-    --sidebar-border: 24 15% 18%;
-    --sidebar-ring: 24 95% 53%;
+    --sidebar-accent: 150 20% 18%;
+    --sidebar-accent-foreground: 145 63% 70%;
+    --sidebar-border: 150 15% 18%;
+    --sidebar-ring: 145 63% 42%;
 
-    --chart-1: 24 95% 53%;
-    --chart-2: 24 80% 65%;
+    --chart-1: 145 63% 42%;
+    --chart-2: 270 50% 55%;
     --chart-3: 142 50% 45%;
     --chart-4: 199 70% 50%;
     --chart-5: 45 80% 50%;
@@ -173,7 +173,7 @@
 
   /* Gradient backgrounds */
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(24 95% 45%) 100%);
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(145 63% 35%) 100%);
   }
 
   .gradient-subtle {

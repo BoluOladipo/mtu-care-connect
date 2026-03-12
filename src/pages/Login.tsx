@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 const Login = () => {
@@ -33,11 +33,15 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-primary rounded-xl flex items-center justify-center">
-            <Activity className="h-8 w-8 text-primary-foreground" />
+          <div className="mx-auto">
+            <img
+              src="/mtu-logo.png"
+              alt="Mountain Top University Logo"
+              className="h-20 w-20 object-contain mx-auto"
+            />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold">MTU Clinic</CardTitle>
@@ -51,7 +55,7 @@ const Login = () => {
               <Input
                 id="email"
                 type="email"
-                placeholder="staff@mtu.edu.ng"
+                placeholder="user@mtu.edu.ng"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

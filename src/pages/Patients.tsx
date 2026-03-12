@@ -12,12 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,37 +28,82 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search,
   UserPlus,
-  Filter,
-  MoreHorizontal,
   Eye,
-  Edit,
-  FileText,
-  Stethoscope,
   Loader2,
+  ArrowLeft,
+  Calendar,
+  Pill,
+  Stethoscope,
+  FileText,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usePatients, useCreatePatient } from "@/hooks/usePatients";
+import { usePatients, useCreatePatient, usePatient } from "@/hooks/usePatients";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 
 const FACULTIES = [
-  "Arts",
-  "Business",
-  "Education",
   "Engineering",
-  "Law",
-  "Medicine",
-  "Sciences",
-  "Social Sciences",
+  "Science",
+  "Management",
+  "Environmental",
+  "Information Technology",
 ];
 
 const LEVELS = ["100", "200", "300", "400", "500"];
 
+function usePatientHistory(patientId: string | null) {
+  return useQuery({
+    queryKey: ["patient-history", patientId],
+    queryFn: async () => {
+      if (!patientId) return null;
+
+      const [
+        { data: appointments },
+        { data: consultations },
+        { data: prescriptions },
+      ] = await Promise.all([
+        supabase
+          .from("appointments")
+          .select("*")
+          .eq("patient_id", patientId)
+          .order("appointment_date", { ascending: false })
+          .limit(20),
+        supabase
+          .from("consultations")
+          .select("*")
+          .eq("patient_id", patientId)
+          .order("consultation_date", { ascending: false })
+          .limit(20),
+        supabase
+          .from("prescriptions")
+          .select("*, drugs(name)")
+          .in(
+            "consultation_id",
+            (
+              await supabase
+                .from("consultations")
+                .select("id")
+                .eq("patient_id", patientId)
+            ).data?.map((c) => c.id) || []
+          )
+          .limit(50),
+      ]);
+
+      return { appointments, consultations, prescriptions };
+    },
+    enabled: !!patientId,
+  });
+}
+
 const Patients = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     student_id: "",
     first_name: "",
@@ -83,6 +122,8 @@ const Patients = () => {
 
   const { data: patients = [], isLoading } = usePatients(searchQuery);
   const createPatient = useCreatePatient();
+  const { data: selectedPatient } = usePatient(selectedPatientId || "");
+  const { data: history, isLoading: loadingHistory } = usePatientHistory(selectedPatientId);
 
   const getInitials = (firstName: string, lastName: string) =>
     `${firstName[0]}${lastName[0]}`.toUpperCase();
@@ -122,6 +163,173 @@ const Patients = () => {
     });
   };
 
+  // Patient detail view
+  if (selectedPatientId && selectedPatient) {
+    return (
+      <AppLayout title="Patient Details" subtitle={`${selectedPatient.first_name} ${selectedPatient.last_name}`}>
+        <div className="space-y-6">
+          <Button variant="outline" onClick={() => setSelectedPatientId(null)} className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Patients
+          </Button>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* Patient Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Patient Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-16 w-16">
+                    <AvatarFallback className="bg-primary/10 text-primary text-lg">
+                      {getInitials(selectedPatient.first_name, selectedPatient.last_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-semibold text-lg">{selectedPatient.first_name} {selectedPatient.last_name}</p>
+                    <p className="text-muted-foreground font-mono">{selectedPatient.student_id}</p>
+                  </div>
+                </div>
+                <div className="border-t pt-3 space-y-2">
+                  <p><span className="text-muted-foreground">Gender:</span> {selectedPatient.gender}</p>
+                  <p><span className="text-muted-foreground">DOB:</span> {format(new Date(selectedPatient.date_of_birth), "MMM d, yyyy")}</p>
+                  <p><span className="text-muted-foreground">Faculty:</span> {selectedPatient.faculty}</p>
+                  <p><span className="text-muted-foreground">Level:</span> {selectedPatient.level}</p>
+                  {selectedPatient.blood_type && <p><span className="text-muted-foreground">Blood Type:</span> {selectedPatient.blood_type}</p>}
+                  {selectedPatient.email && <p><span className="text-muted-foreground">Email:</span> {selectedPatient.email}</p>}
+                  {selectedPatient.phone && <p><span className="text-muted-foreground">Phone:</span> {selectedPatient.phone}</p>}
+                  {selectedPatient.allergies && selectedPatient.allergies.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground">Allergies:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedPatient.allergies.map((a, i) => (
+                          <Badge key={i} variant="destructive" className="text-xs">{a}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Visit History & Consultations */}
+            <div className="lg:col-span-2 space-y-6">
+              {loadingHistory ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {/* Appointments History */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Calendar className="h-4 w-4 text-primary" />
+                        Visit History ({history?.appointments?.length || 0})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!history?.appointments?.length ? (
+                        <p className="text-sm text-muted-foreground">No visit records</p>
+                      ) : (
+                        <ScrollArea className="max-h-[300px]">
+                          <div className="space-y-2">
+                            {history.appointments.map((apt: any) => (
+                              <div key={apt.id} className="rounded-lg border p-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{format(new Date(apt.appointment_date), "MMM d, yyyy")}</span>
+                                  <Badge variant="outline" className="text-xs">{apt.status}</Badge>
+                                </div>
+                                <p className="text-muted-foreground capitalize">{apt.type.replace("_", " ")}</p>
+                                {apt.reason && <p className="text-xs text-muted-foreground mt-1">Reason: {apt.reason}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Consultations */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Stethoscope className="h-4 w-4 text-primary" />
+                        Consultations ({history?.consultations?.length || 0})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!history?.consultations?.length ? (
+                        <p className="text-sm text-muted-foreground">No consultation records</p>
+                      ) : (
+                        <ScrollArea className="max-h-[300px]">
+                          <div className="space-y-2">
+                            {history.consultations.map((con: any) => (
+                              <div key={con.id} className="rounded-lg border p-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{format(new Date(con.consultation_date), "MMM d, yyyy")}</span>
+                                  <Badge variant="outline" className="text-xs">{con.status}</Badge>
+                                </div>
+                                <p className="text-muted-foreground">Complaint: {con.chief_complaint}</p>
+                                {con.diagnosis && con.diagnosis.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {con.diagnosis.map((d: string, i: number) => (
+                                      <Badge key={i} variant="secondary" className="text-xs">{d}</Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                {con.notes && <p className="text-xs text-muted-foreground mt-1">{con.notes}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Prescriptions */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Pill className="h-4 w-4 text-primary" />
+                        Prescriptions ({history?.prescriptions?.length || 0})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {!history?.prescriptions?.length ? (
+                        <p className="text-sm text-muted-foreground">No prescription records</p>
+                      ) : (
+                        <ScrollArea className="max-h-[300px]">
+                          <div className="space-y-2">
+                            {history.prescriptions.map((p: any) => (
+                              <div key={p.id} className="rounded-lg border p-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{(p.drugs as any)?.name || "Unknown Drug"}</span>
+                                  <Badge variant={p.dispensed ? "default" : "secondary"} className="text-xs">
+                                    {p.dispensed ? "Dispensed" : "Pending"}
+                                  </Badge>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  {p.dosage} • {p.frequency} • {p.duration}
+                                </p>
+                                {p.instructions && <p className="text-xs text-muted-foreground mt-1">{p.instructions}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   const activeCount = patients.filter((p) => p.status === "active").length;
 
   return (
@@ -133,15 +341,12 @@ const Patients = () => {
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by name or student ID..."
+                placeholder="Search by name or matric number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="icon">
-              <Filter className="h-4 w-4" />
-            </Button>
           </div>
           <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
             <UserPlus className="h-4 w-4" />
@@ -206,7 +411,7 @@ const Patients = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Patient</TableHead>
-                      <TableHead>Student ID</TableHead>
+                      <TableHead>Matric Number</TableHead>
                       <TableHead>Faculty</TableHead>
                       <TableHead>Level</TableHead>
                       <TableHead>Registered</TableHead>
@@ -216,7 +421,11 @@ const Patients = () => {
                   </TableHeader>
                   <TableBody>
                     {patients.map((patient) => (
-                      <TableRow key={patient.id} className="cursor-pointer hover:bg-muted/50">
+                      <TableRow
+                        key={patient.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedPatientId(patient.id)}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-9 w-9">
@@ -249,31 +458,16 @@ const Patients = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="gap-2">
-                                <Eye className="h-4 w-4" />
-                                View Profile
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
-                                <Edit className="h-4 w-4" />
-                                Edit Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
-                                <FileText className="h-4 w-4" />
-                                View EHR
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2">
-                                <Stethoscope className="h-4 w-4" />
-                                Start Consultation
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPatientId(patient.id);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -298,7 +492,7 @@ const Patients = () => {
             <div className="grid gap-4 py-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="student_id">Student ID *</Label>
+                  <Label htmlFor="student_id">Matric Number *</Label>
                   <Input
                     id="student_id"
                     placeholder="MTU/2024/0001"
@@ -456,12 +650,15 @@ const Patients = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="emergency_relationship">Relationship</Label>
+                    <Label htmlFor="emergency_rel">Relationship</Label>
                     <Input
-                      id="emergency_relationship"
+                      id="emergency_rel"
                       value={formData.emergency_contact_relationship}
                       onChange={(e) =>
-                        setFormData({ ...formData, emergency_contact_relationship: e.target.value })
+                        setFormData({
+                          ...formData,
+                          emergency_contact_relationship: e.target.value,
+                        })
                       }
                     />
                   </div>
@@ -473,7 +670,9 @@ const Patients = () => {
                 Cancel
               </Button>
               <Button type="submit" disabled={createPatient.isPending}>
-                {createPatient.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {createPatient.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Register Patient
               </Button>
             </DialogFooter>

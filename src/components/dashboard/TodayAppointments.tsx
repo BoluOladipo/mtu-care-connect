@@ -1,4 +1,4 @@
-import { Calendar, Clock, User, ChevronRight } from "lucide-react";
+import { Calendar, Clock, ChevronRight, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "Confirmed", className: "bg-info/20 text-info" },
   in_progress: { label: "In Progress", className: "bg-primary/20 text-primary" },
   completed: { label: "Completed", className: "bg-success/20 text-success" },
+  attended: { label: "Attended", className: "bg-success/20 text-success" },
+  missed: { label: "Missed", className: "bg-warning/20 text-warning" },
   cancelled: { label: "Cancelled", className: "bg-destructive/20 text-destructive" },
 };
 
@@ -34,8 +36,6 @@ export function TodayAppointments() {
     day: "numeric",
   });
 
-  const activeAppointments = appointments.filter((a) => a.status !== "cancelled");
-
   return (
     <Card className="flex h-[400px] flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
@@ -55,14 +55,14 @@ export function TodayAppointments() {
                 <Skeleton key={i} className="h-20 w-full rounded-lg" />
               ))}
             </div>
-          ) : activeAppointments.length === 0 ? (
+          ) : appointments.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Calendar className="mb-3 h-10 w-10 text-muted-foreground" />
               <p className="text-muted-foreground">No appointments today</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {activeAppointments.map((appointment) => {
+              {appointments.map((appointment) => {
                 const status = statusConfig[appointment.status] || statusConfig.scheduled;
 
                 return (
@@ -70,15 +70,12 @@ export function TodayAppointments() {
                     key={appointment.id}
                     className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-sm cursor-pointer"
                   >
-                    {/* Time */}
                     <div className="flex flex-col items-center justify-center rounded-lg bg-primary/10 px-3 py-2">
                       <Clock className="mb-1 h-4 w-4 text-primary" />
                       <span className="text-sm font-semibold text-primary">
                         {formatTime(appointment.appointment_time)}
                       </span>
                     </div>
-
-                    {/* Appointment Info */}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">
                         {appointment.patients.first_name} {appointment.patients.last_name}
@@ -87,13 +84,10 @@ export function TodayAppointments() {
                         {appointment.type.replace("_", " ")}
                       </p>
                     </div>
-
-                    {/* Status */}
                     <Badge variant="secondary" className={status.className}>
+                      {appointment.status === "attended" && <CheckCircle className="mr-1 h-3 w-3" />}
                       {status.label}
                     </Badge>
-
-                    {/* Arrow */}
                     <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
                 );
