@@ -2,9 +2,6 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -20,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays, Loader2, Save, RefreshCw } from "lucide-react";
+import { CalendarDays, Loader2, RefreshCw, Shuffle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -54,7 +51,7 @@ export function DoctorRoster() {
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isRandomizing, setIsRandomizing] = useState(false);
 
   useEffect(() => {
     fetchDoctors();
@@ -109,64 +106,34 @@ export function DoctorRoster() {
         .order("day_of_week");
       if (error) throw error;
 
-      // Ensure all 7 days exist in state
-      const existing = new Map((data || []).map((s) => [s.day_of_week, s]));
-      const fullSchedule: ScheduleEntry[] = DAYS_OF_WEEK.map((day) => {
-        const ex = existing.get(day.value);
-        return ex
-          ? { id: ex.id, doctor_id: doctorId, day_of_week: day.value, start_time: ex.start_time, end_time: ex.end_time, is_available: ex.is_available }
-          : { doctor_id: doctorId, day_of_week: day.value, start_time: "08:00", end_time: "16:00", is_available: false };
-      });
-      setSchedules(fullSchedule);
+      setSchedules(data || []);
     } catch (error) {
       console.error("Error fetching schedules:", error);
     }
   };
 
-  const updateSchedule = (dayOfWeek: number, field: keyof ScheduleEntry, value: string | boolean) => {
-    setSchedules((prev) =>
-      prev.map((s) => (s.day_of_week === dayOfWeek ? { ...s, [field]: value } : s))
-    );
+  const handleRandomize = async () => {
+    setIsRandomizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("randomize-doctor-roster");
+      if (error) throw error;
+      toast.success("Doctor roster has been randomized for this month!");
+      if (selectedDoctor) {
+        fetchSchedules(selectedDoctor);
+      }
+    } catch (error: any) {
+      toast.error(`Failed to randomize roster: ${error.message}`);
+    } finally {
+      setIsRandomizing(false);
+    }
   };
 
-  const handleSave = async () => {
-    if (!selectedDoctor) return;
-    setIsSaving(true);
-    try {
-      // Upsert all schedules for this doctor
-      for (const schedule of schedules) {
-        if (schedule.id) {
-          const { error } = await supabase
-            .from("doctor_schedules")
-            .update({
-              start_time: schedule.start_time,
-              end_time: schedule.end_time,
-              is_available: schedule.is_available,
-            })
-            .eq("id", schedule.id);
-          if (error) throw error;
-        } else if (schedule.is_available) {
-          // Only insert if marked as available
-          const { error } = await supabase
-            .from("doctor_schedules")
-            .insert({
-              doctor_id: schedule.doctor_id,
-              day_of_week: schedule.day_of_week,
-              start_time: schedule.start_time,
-              end_time: schedule.end_time,
-              is_available: schedule.is_available,
-            });
-          if (error) throw error;
-        }
-      }
-      toast.success("Roster updated successfully");
-      fetchSchedules(selectedDoctor);
-    } catch (error) {
-      console.error("Error saving schedules:", error);
-      toast.error("Failed to save roster");
-    } finally {
-      setIsSaving(false);
-    }
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   };
 
   if (isLoading) {
@@ -187,7 +154,7 @@ export function DoctorRoster() {
           Doctor Duty Roster
         </CardTitle>
         <CardDescription>
-          Manage weekly schedules for each doctor. New doctors are automatically added with a default Mon–Fri schedule.
+          The roster is automatically randomized at the start of each month. New doctors are assigned a default schedule when their role is set.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -198,88 +165,72 @@ export function DoctorRoster() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-4">
-              <Label>Select Doctor</Label>
-              <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                <SelectTrigger className="w-[280px]">
-                  <SelectValue placeholder="Choose a doctor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {doctors.map((doc) => (
-                    <SelectItem key={doc.user_id} value={doc.user_id}>
-                      {doc.full_name} {doc.department ? `(${doc.department})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue placeholder="Choose a doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((doc) => (
+                      <SelectItem key={doc.user_id} value={doc.user_id}>
+                        {doc.full_name} {doc.department ? `(${doc.department})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleRandomize}
+                disabled={isRandomizing}
+                className="gap-2"
+              >
+                {isRandomizing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Shuffle className="h-4 w-4" />
+                )}
+                Randomize All Rosters
+              </Button>
             </div>
 
             {selectedDoctor && (
-              <>
-                <div className="rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Day</TableHead>
-                        <TableHead>On Duty</TableHead>
-                        <TableHead>Start Time</TableHead>
-                        <TableHead>End Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {schedules.map((schedule) => {
-                        const day = DAYS_OF_WEEK.find((d) => d.value === schedule.day_of_week);
-                        return (
-                          <TableRow key={schedule.day_of_week}>
-                            <TableCell className="font-medium">{day?.label}</TableCell>
-                            <TableCell>
-                              <Switch
-                                checked={schedule.is_available}
-                                onCheckedChange={(checked) =>
-                                  updateSchedule(schedule.day_of_week, "is_available", checked)
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="time"
-                                value={schedule.start_time}
-                                onChange={(e) =>
-                                  updateSchedule(schedule.day_of_week, "start_time", e.target.value)
-                                }
-                                disabled={!schedule.is_available}
-                                className="w-32"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="time"
-                                value={schedule.end_time}
-                                onChange={(e) =>
-                                  updateSchedule(schedule.day_of_week, "end_time", e.target.value)
-                                }
-                                disabled={!schedule.is_available}
-                                className="w-32"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Save Roster
-                  </Button>
-                </div>
-              </>
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Day</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Shift Hours</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {DAYS_OF_WEEK.map((day) => {
+                      const schedule = schedules.find(
+                        (s) => s.day_of_week === day.value && s.is_available
+                      );
+                      return (
+                        <TableRow key={day.value}>
+                          <TableCell className="font-medium">{day.label}</TableCell>
+                          <TableCell>
+                            {schedule ? (
+                              <Badge className="bg-success/20 text-success">On Duty</Badge>
+                            ) : (
+                              <Badge variant="secondary">Off</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {schedule
+                              ? `${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </>
         )}

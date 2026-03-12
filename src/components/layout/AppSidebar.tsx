@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Stethoscope,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,7 +35,7 @@ const mainNavItems = [
 
 const clinicalNavItems = [
   { title: "Patients", icon: Users, path: "/patients" },
-  { title: "Consultations", icon: Stethoscope, path: "/consultations" },
+  { title: "Consultations", icon: FlaskConical, path: "/consultations" },
   { title: "Laboratory", icon: FlaskConical, path: "/laboratory" },
   { title: "Pharmacy", icon: Pill, path: "/pharmacy" },
   { title: "Immunization", icon: Syringe, path: "/immunization" },
@@ -80,9 +79,11 @@ export function AppSidebar() {
     <Sidebar className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <Link to="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-            <Stethoscope className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img
+            src="/mtu-logo.png"
+            alt="Mountain Top University Logo"
+            className="h-10 w-10 rounded-lg object-contain"
+          />
           <div className="flex flex-col">
             <span className="text-lg font-bold text-sidebar-foreground">MTU Clinic</span>
             <span className="text-xs text-muted-foreground">Health Centre</span>

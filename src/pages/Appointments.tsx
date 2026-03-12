@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  CheckCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppointments, useCreateAppointment, useCancelAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
@@ -52,7 +53,7 @@ const statusColors: Record<string, string> = {
   confirmed: "bg-success/20 text-success border-success/30",
   completed: "bg-info/20 text-info border-info/30",
   attended: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300",
-  missed: "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300",
+  missed: "bg-warning/20 text-warning border-warning/30",
   cancelled: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
@@ -121,7 +122,11 @@ const Appointments = () => {
     if (date) setDate(addDays(date, 1));
   };
 
-  const bookedCount = appointments.filter((a) => a.status !== "cancelled").length;
+  // Day summary counts
+  const scheduledCount = appointments.filter((a) => a.status === "scheduled").length;
+  const attendedCount = appointments.filter((a) => a.status === "attended").length;
+  const missedCount = appointments.filter((a) => a.status === "missed").length;
+  const cancelledCount = appointments.filter((a) => a.status === "cancelled").length;
 
   return (
     <AppLayout title="Appointments" subtitle="Schedule and manage patient appointments">
@@ -145,14 +150,20 @@ const Appointments = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Booked</span>
-                <span className="font-medium text-primary">{bookedCount}</span>
+                <span className="text-muted-foreground">Scheduled</span>
+                <span className="font-medium text-primary">{scheduledCount}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Attended</span>
+                <span className="font-medium text-success">{attendedCount}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Missed</span>
+                <span className="font-medium text-warning">{missedCount}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Cancelled</span>
-                <span className="font-medium text-destructive">
-                  {appointments.filter((a) => a.status === "cancelled").length}
-                </span>
+                <span className="font-medium text-destructive">{cancelledCount}</span>
               </div>
             </CardContent>
           </Card>
@@ -280,7 +291,7 @@ const Appointments = () => {
                   Schedule
                 </CardTitle>
                 <Badge variant="outline">
-                  {bookedCount} appointment{bookedCount !== 1 ? "s" : ""}
+                  {appointments.length} appointment{appointments.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
             </CardHeader>
@@ -303,7 +314,9 @@ const Appointments = () => {
                       className={cn(
                         "rounded-lg border p-4 transition-all",
                         appointment.status === "cancelled" || appointment.status === "missed"
-                          ? "opacity-50"
+                          ? "opacity-60"
+                          : appointment.status === "attended"
+                          ? "border-success/30 bg-success/5"
                           : "border-primary/30 bg-primary/5"
                       )}
                     >
@@ -316,6 +329,7 @@ const Appointments = () => {
                           variant="outline"
                           className={statusColors[appointment.status]}
                         >
+                          {appointment.status === "attended" && <CheckCircle className="mr-1 h-3 w-3" />}
                           {appointment.status}
                         </Badge>
                       </div>
@@ -348,6 +362,7 @@ const Appointments = () => {
                                   updateAppointment.mutate({ id: appointment.id, status: "attended" });
                                 }}
                               >
+                                <CheckCircle className="mr-1 h-3 w-3" />
                                 Mark as Attended
                               </Button>
                               <Button
