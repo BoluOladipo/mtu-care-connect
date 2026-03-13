@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireStaff = true, allowStudent = false }: ProtectedRouteProps) {
-  const { user, isLoading, isStaff, hasRole } = useAuth();
+  const { user, isLoading, isStaff, hasRole, roles } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -24,40 +24,21 @@ export function ProtectedRoute({ children, requireStaff = true, allowStudent = f
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check if user is a student
   const isStudent = hasRole("student");
 
-  // If user is a student and this route allows students, allow access
-  if (isStudent && allowStudent) {
-    return <>{children}</>;
-  }
+  if (isStudent && allowStudent) return <>{children}</>;
+  if (isStudent && !allowStudent) return <Navigate to="/student" replace />;
 
-  // If user is a student but route doesn't allow students, redirect to student portal
-  if (isStudent && !allowStudent) {
-    return <Navigate to="/student" replace />;
-  }
-
-  // For non-students, check if they need staff role
+  // If user has no roles yet, redirect to landing instead of showing "pending"
   if (requireStaff && !isStaff()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-foreground">Access Pending</h1>
-          <p className="text-muted-foreground max-w-md">
-            Your account is registered but you haven't been assigned a role yet. 
-            Please contact an administrator to get access to the clinic system.
-          </p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/landing" replace />;
   }
 
   return <>{children}</>;
 }
 
-// Wrapper for student-only routes
 export function StudentRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, hasRole } = useAuth();
+  const { user, isLoading, hasRole, roles } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -72,7 +53,6 @@ export function StudentRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If user is staff (not student), redirect to main dashboard
   const isStudent = hasRole("student");
   if (!isStudent) {
     return <Navigate to="/" replace />;
