@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute, StudentRoute } from "@/components/auth/ProtectedRoute";
 import { NotificationBanner } from "@/components/notifications/NotificationBanner";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import Queue from "./pages/Queue";
@@ -19,6 +20,7 @@ import Records from "./pages/Records";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import StaffSignup from "./pages/StaffSignup";
 import StudentPortal from "./pages/StudentPortal";
 import NotFound from "./pages/NotFound";
 
@@ -33,8 +35,11 @@ const App = () => (
         <AuthProvider>
           <NotificationBanner />
           <Routes>
+            <Route path="/landing" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/signup/student" element={<Signup />} />
+            <Route path="/signup/staff" element={<StaffSignup />} />
             <Route path="/student" element={<StudentRoute><StudentPortal /></StudentRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/patients" element={<ProtectedRoute><Patients /></ProtectedRoute>} />

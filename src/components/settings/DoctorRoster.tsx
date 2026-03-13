@@ -3,137 +3,114 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CalendarDays, Loader2, RefreshCw, Shuffle } from "lucide-react";
+import { CalendarDays, Loader2, Printer, Shuffle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const DAYS_OF_WEEK = [
-  { value: 0, label: "Sunday" },
   { value: 1, label: "Monday" },
   { value: 2, label: "Tuesday" },
   { value: 3, label: "Wednesday" },
   { value: 4, label: "Thursday" },
   { value: 5, label: "Friday" },
   { value: 6, label: "Saturday" },
+  { value: 0, label: "Sunday" },
 ];
 
-interface DoctorProfile {
-  user_id: string;
-  full_name: string;
-  department: string | null;
-}
-
 interface ScheduleEntry {
-  id?: string;
+  id: string;
   doctor_id: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
   is_available: boolean;
+  doctor_name?: string;
 }
 
 export function DoctorRoster() {
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
-  const [selectedDoctor, setSelectedDoctor] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRandomizing, setIsRandomizing] = useState(false);
 
   useEffect(() => {
-    fetchDoctors();
+    fetchAllSchedules();
   }, []);
 
-  useEffect(() => {
-    if (selectedDoctor) {
-      fetchSchedules(selectedDoctor);
-    }
-  }, [selectedDoctor]);
-
-  const fetchDoctors = async () => {
+  const fetchAllSchedules = async () => {
     setIsLoading(true);
     try {
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "doctor");
-      if (rolesError) throw rolesError;
+      const { data: schData, error: schErr } = await supabase
+        .from("doctor_schedules")
+        .select("*")
+        .eq("is_available", true)
+        .order("day_of_week");
+      if (schErr) throw schErr;
 
-      if (!roles || roles.length === 0) {
-        setDoctors([]);
+      if (!schData || schData.length === 0) {
+        setSchedules([]);
         setIsLoading(false);
         return;
       }
 
-      const doctorIds = roles.map((r) => r.user_id);
-      const { data: profiles, error: profilesError } = await supabase
+      const doctorIds = [...new Set(schData.map((s) => s.doctor_id))];
+      const { data: profiles } = await supabase
         .from("profiles")
-        .select("user_id, full_name, department")
+        .select("user_id, full_name")
         .in("user_id", doctorIds);
-      if (profilesError) throw profilesError;
 
-      setDoctors(profiles || []);
-      if (profiles && profiles.length > 0 && !selectedDoctor) {
-        setSelectedDoctor(profiles[0].user_id);
-      }
-    } catch (error) {
-      console.error("Error fetching doctors:", error);
-      toast.error("Failed to load doctors");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const nameMap = new Map(profiles?.map((p) => [p.user_id, p.full_name]) || []);
 
-  const fetchSchedules = async (doctorId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("doctor_schedules")
-        .select("*")
-        .eq("doctor_id", doctorId)
-        .order("day_of_week");
-      if (error) throw error;
-
-      setSchedules(data || []);
+      setSchedules(schData.map((s) => ({ ...s, doctor_name: nameMap.get(s.doctor_id) || "Unknown" })));
     } catch (error) {
       console.error("Error fetching schedules:", error);
+      toast.error("Failed to load roster");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRandomize = async () => {
     setIsRandomizing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("randomize-doctor-roster");
+      const { error } = await supabase.functions.invoke("randomize-doctor-roster");
       if (error) throw error;
-      toast.success("Doctor roster has been randomized for this month!");
-      if (selectedDoctor) {
-        fetchSchedules(selectedDoctor);
-      }
+      toast.success("Doctor roster has been randomized!");
+      fetchAllSchedules();
     } catch (error: any) {
-      toast.error(`Failed to randomize roster: ${error.message}`);
+      toast.error(`Failed to randomize: ${error.message}`);
     } finally {
       setIsRandomizing(false);
     }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
     const hour = parseInt(hours);
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+    return `${hour % 12 || 12}:${minutes} ${hour >= 12 ? "PM" : "AM"}`;
+  };
+
+  // Build timetable: for each day, find morning (start < 14:00) and night (start >= 14:00) doctors
+  const getDoctorsForDay = (dayValue: number) => {
+    const daySchedules = schedules.filter((s) => s.day_of_week === dayValue);
+    const morning = daySchedules.find((s) => {
+      const hour = parseInt(s.start_time.split(":")[0]);
+      return hour < 14;
+    });
+    const night = daySchedules.find((s) => {
+      const hour = parseInt(s.start_time.split(":")[0]);
+      return hour >= 14;
+    });
+    // If only one doctor for the day, show them in morning slot
+    if (!morning && !night && daySchedules.length > 0) {
+      return { morning: daySchedules[0], night: daySchedules[1] || null };
+    }
+    return { morning: morning || null, night: night || null };
   };
 
   if (isLoading) {
@@ -147,92 +124,84 @@ export function DoctorRoster() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="print:shadow-none print:border-0">
+      <CardHeader className="print:pb-2">
         <CardTitle className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5" />
           Doctor Duty Roster
         </CardTitle>
         <CardDescription>
-          The roster is automatically randomized at the start of each month. New doctors are assigned a default schedule when their role is set.
+          Automatically randomized on the 1st of every month. 2 doctors per day — morning &amp; night shift.
         </CardDescription>
+        <div className="flex gap-2 print:hidden pt-2">
+          <Button variant="outline" onClick={handleRandomize} disabled={isRandomizing} className="gap-2">
+            {isRandomizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+            Randomize Roster
+          </Button>
+          <Button variant="outline" onClick={handlePrint} className="gap-2">
+            <Printer className="h-4 w-4" />
+            Print Roster
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {doctors.length === 0 ? (
+      <CardContent>
+        {schedules.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-            <p>No doctors registered yet.</p>
-            <p className="text-sm">Assign the "Doctor" role to a user in User Management first.</p>
+            <p>No roster data yet.</p>
+            <p className="text-sm">Assign the "Doctor" role to users, then click "Randomize Roster".</p>
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-4">
-                <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                  <SelectTrigger className="w-[280px]">
-                    <SelectValue placeholder="Choose a doctor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctors.map((doc) => (
-                      <SelectItem key={doc.user_id} value={doc.user_id}>
-                        {doc.full_name} {doc.department ? `(${doc.department})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="outline"
-                onClick={handleRandomize}
-                disabled={isRandomizing}
-                className="gap-2"
-              >
-                {isRandomizing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Shuffle className="h-4 w-4" />
-                )}
-                Randomize All Rosters
-              </Button>
-            </div>
-
-            {selectedDoctor && (
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Day</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Shift Hours</TableHead>
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px] font-bold">Day</TableHead>
+                  <TableHead className="text-center font-bold">
+                    <div>Morning Shift</div>
+                    <div className="text-xs font-normal text-muted-foreground">8:00 AM – 2:00 PM</div>
+                  </TableHead>
+                  <TableHead className="text-center font-bold">
+                    <div>Night Shift</div>
+                    <div className="text-xs font-normal text-muted-foreground">2:00 PM – 8:00 PM</div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {DAYS_OF_WEEK.map((day) => {
+                  const { morning, night } = getDoctorsForDay(day.value);
+                  return (
+                    <TableRow key={day.value}>
+                      <TableCell className="font-semibold">{day.label}</TableCell>
+                      <TableCell className="text-center">
+                        {morning ? (
+                          <div>
+                            <p className="font-medium text-sm">{morning.doctor_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTime(morning.start_time)} – {formatTime(morning.end_time)}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {night ? (
+                          <div>
+                            <p className="font-medium text-sm">{night.doctor_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTime(night.start_time)} – {formatTime(night.end_time)}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {DAYS_OF_WEEK.map((day) => {
-                      const schedule = schedules.find(
-                        (s) => s.day_of_week === day.value && s.is_available
-                      );
-                      return (
-                        <TableRow key={day.value}>
-                          <TableCell className="font-medium">{day.label}</TableCell>
-                          <TableCell>
-                            {schedule ? (
-                              <Badge className="bg-success/20 text-success">On Duty</Badge>
-                            ) : (
-                              <Badge variant="secondary">Off</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {schedule
-                              ? `${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`
-                              : "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>

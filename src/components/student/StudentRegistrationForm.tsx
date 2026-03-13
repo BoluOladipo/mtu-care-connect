@@ -4,11 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Loader2, UserPlus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +14,9 @@ import { toast } from "sonner";
 interface StudentRegistrationFormProps {
   onRegistered: () => void;
 }
+
+const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const MATRIC_REGEX = /^(17|18|19|20|21|22|23|24|25)\d{9}$/;
 
 const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps) => {
   const { user, profile } = useAuth();
@@ -31,14 +30,32 @@ const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps)
     faculty: "",
     level: "",
     phone: "",
+    blood_type: "",
+    allergies: "",
   });
+
+  const matricValid = MATRIC_REGEX.test(formData.student_id);
+
+  const handleMatricChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 11);
+    setFormData({ ...formData, student_id: val });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.email) return;
 
+    if (!matricValid) {
+      toast.error("Matric number must be 11 digits starting with 17-25");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const allergiesArray = formData.allergies
+        ? formData.allergies.split(",").map((a) => a.trim()).filter(Boolean)
+        : null;
+
       const { error } = await supabase.from("patients").insert({
         student_id: formData.student_id,
         first_name: formData.first_name,
@@ -49,6 +66,8 @@ const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps)
         level: formData.level,
         phone: formData.phone || null,
         email: user.email,
+        blood_type: formData.blood_type || null,
+        allergies: allergiesArray,
       });
 
       if (error) throw error;
@@ -68,57 +87,41 @@ const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps)
           <UserPlus className="h-5 w-5 text-primary" />
           Complete Your Registration
         </CardTitle>
-        <CardDescription>
-          Please fill in your details to register as a patient before booking appointments.
-        </CardDescription>
+        <CardDescription>Fill in your details to register as a patient.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="student_id">Student ID *</Label>
+              <Label>Matric Number (11 digits) *</Label>
               <Input
-                id="student_id"
-                placeholder="MTU/2022/001"
+                placeholder="22010100001"
                 value={formData.student_id}
-                onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
+                onChange={handleMatricChange}
+                maxLength={11}
+                inputMode="numeric"
                 required
               />
+              {formData.student_id && !matricValid && (
+                <p className="text-xs text-destructive">Must be 11 digits starting with 17-25</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="first_name">First Name *</Label>
-              <Input
-                id="first_name"
-                value={formData.first_name}
-                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                required
-              />
+              <Label>First Name *</Label>
+              <Input value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last_name">Last Name *</Label>
-              <Input
-                id="last_name"
-                value={formData.last_name}
-                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                required
-              />
+              <Label>Last Name *</Label>
+              <Input value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dob">Date of Birth *</Label>
-              <Input
-                id="dob"
-                type="date"
-                value={formData.date_of_birth}
-                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                required
-              />
+              <Label>Date of Birth *</Label>
+              <Input type="date" value={formData.date_of_birth} onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>Gender *</Label>
               <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select gender" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="male">Male</SelectItem>
                   <SelectItem value="female">Female</SelectItem>
@@ -128,9 +131,7 @@ const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps)
             <div className="space-y-2">
               <Label>Faculty *</Label>
               <Select value={formData.faculty} onValueChange={(v) => setFormData({ ...formData, faculty: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select faculty" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select faculty" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Engineering">Engineering</SelectItem>
                   <SelectItem value="Science">Science</SelectItem>
@@ -143,30 +144,33 @@ const StudentRegistrationForm = ({ onRegistered }: StudentRegistrationFormProps)
             <div className="space-y-2">
               <Label>Level *</Label>
               <Select value={formData.level} onValueChange={(v) => setFormData({ ...formData, level: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="100">100 Level</SelectItem>
-                  <SelectItem value="200">200 Level</SelectItem>
-                  <SelectItem value="300">300 Level</SelectItem>
-                  <SelectItem value="400">400 Level</SelectItem>
-                  <SelectItem value="500">500 Level</SelectItem>
+                  {["100", "200", "300", "400", "500"].map((l) => (
+                    <SelectItem key={l} value={l}>{l} Level</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone (Optional)</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="08012345678"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
+              <Label>Blood Type</Label>
+              <Select value={formData.blood_type} onValueChange={(v) => setFormData({ ...formData, blood_type: v })}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {BLOOD_TYPES.map((bt) => (<SelectItem key={bt} value={bt}>{bt}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Allergies</Label>
+              <Input placeholder="e.g. Penicillin, Dust (comma-separated)" value={formData.allergies} onChange={(e) => setFormData({ ...formData, allergies: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone (Optional)</Label>
+              <Input type="tel" placeholder="08012345678" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full" disabled={isSubmitting || !matricValid}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Register & Continue
           </Button>

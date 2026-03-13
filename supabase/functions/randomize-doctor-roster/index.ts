@@ -30,74 +30,92 @@ Deno.serve(async (req) => {
 
     const doctorIds = doctorRoles.map((r) => r.user_id);
 
-    // Delete all existing schedules
+    // Delete all existing schedules for these doctors
     const { error: deleteError } = await supabase
       .from("doctor_schedules")
       .delete()
       .in("doctor_id", doctorIds);
-
     if (deleteError) throw deleteError;
 
-    // Randomize: each doctor gets 3-5 random days, with random shift times
-    const shifts = [
-      { start: "08:00", end: "14:00" },
-      { start: "10:00", end: "16:00" },
-      { start: "08:00", end: "16:00" },
-      { start: "09:00", end: "15:00" },
-      { start: "07:00", end: "13:00" },
-    ];
+    // Strategy: 2 doctors per day (morning 8-14, night 14-20)
+    // Each doctor should have 1-2 days off per week
+    const days = [0, 1, 2, 3, 4, 5, 6];
+    const newSchedules: any[] = [];
 
-    const newSchedules: Array<{
-      doctor_id: string;
-      day_of_week: number;
-      start_time: string;
-      end_time: string;
-      is_available: boolean;
-    }> = [];
-
-    for (const doctorId of doctorIds) {
-      // Random number of duty days (3-5)
-      const numDays = 3 + Math.floor(Math.random() * 3);
-      
-      // Shuffle days 0-6 and pick numDays
-      const allDays = [0, 1, 2, 3, 4, 5, 6];
-      for (let i = allDays.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allDays[i], allDays[j]] = [allDays[j], allDays[i]];
-      }
-      const dutyDays = allDays.slice(0, numDays);
-
-      for (const day of dutyDays) {
-        const shift = shifts[Math.floor(Math.random() * shifts.length)];
+    if (doctorIds.length === 1) {
+      // Single doctor: works all days, full shift
+      for (const day of days) {
         newSchedules.push({
-          doctor_id: doctorId,
+          doctor_id: doctorIds[0],
           day_of_week: day,
-          start_time: shift.start,
-          end_time: shift.end,
+          start_time: "08:00",
+          end_time: "20:00",
           is_available: true,
         });
+      }
+    } else {
+      // Shuffle doctors
+      const shuffled = [...doctorIds].sort(() => Math.random() - 0.5);
+      const assignCount: Record<string, number> = {};
+      doctorIds.forEach((id) => { assignCount[id] = 0; });
+
+      // Cap at 5-6 shifts per doctor to ensure days off
+      const maxShifts = Math.min(6, Math.ceil(14 / doctorIds.length));
+
+      for (const day of days) {
+        // Morning shift
+        const availMorning = shuffled
+          .filter((id) => assignCount[id] < maxShifts)
+          .sort((a, b) => assignCount[a] - assignCount[b]);
+        
+        const morningDoc = availMorning[0];
+        if (morningDoc) {
+          newSchedules.push({
+            doctor_id: morningDoc,
+            day_of_week: day,
+            start_time: "08:00",
+            end_time: "14:00",
+            is_available: true,
+          });
+          assignCount[morningDoc]++;
+        }
+
+        // Night shift - different doctor
+        const availNight = shuffled
+          .filter((id) => id !== morningDoc && assignCount[id] < maxShifts)
+          .sort((a, b) => assignCount[a] - assignCount[b]);
+
+        const nightDoc = availNight[0] || shuffled.find((id) => id !== morningDoc) || shuffled[0];
+        if (nightDoc) {
+          newSchedules.push({
+            doctor_id: nightDoc,
+            day_of_week: day,
+            start_time: "14:00",
+            end_time: "20:00",
+            is_available: true,
+          });
+          if (nightDoc !== morningDoc) assignCount[nightDoc]++;
+        }
       }
     }
 
     const { error: insertError } = await supabase
       .from("doctor_schedules")
       .insert(newSchedules);
-
     if (insertError) throw insertError;
 
-    // Create a notification about the roster change
-    const { error: notifError } = await supabase.from("notifications").insert({
+    // Create notification
+    await supabase.from("notifications").insert({
       type: "roster",
       title: "Monthly Roster Updated",
-      message: `Doctor duty roster has been automatically randomized for ${new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}. ${doctorIds.length} doctors assigned.`,
+      message: `Doctor duty roster randomized for ${new Date().toLocaleString("en-US", { month: "long", year: "numeric" })}. ${doctorIds.length} doctors, ${newSchedules.length} shifts assigned.`,
       user_id: null,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Roster randomized for ${doctorIds.length} doctors`,
-        schedulesCreated: newSchedules.length,
+        message: `Roster randomized: ${newSchedules.length} shifts for ${doctorIds.length} doctors`,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

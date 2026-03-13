@@ -16,9 +16,15 @@ export function usePatients(searchQuery?: string) {
         .order("created_at", { ascending: false });
 
       if (searchQuery) {
-        query = query.or(
-          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,student_id.ilike.%${searchQuery}%`
-        );
+        // Check if search is purely numeric (matric number search)
+        const isNumeric = /^\d+$/.test(searchQuery.trim());
+        if (isNumeric) {
+          query = query.ilike("student_id", `%${searchQuery.trim()}%`);
+        } else {
+          query = query.or(
+            `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,student_id.ilike.%${searchQuery}%`
+          );
+        }
       }
 
       const { data, error } = await query;
