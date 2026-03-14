@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-type AppRole = "admin" | "doctor" | "nurse" | "pharmacist" | "lab_technician" | "receptionist" | "student";
+type AppRole = "admin" | "doctor" | "nurse" | "pharmacist" | "lab_technician" | "student";
 
 interface Profile {
   id: string;
@@ -35,16 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    // Check for existing session FIRST
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchUserData(session.user.id);
+      }
+      setIsLoading(false);
+    });
+
+    // THEN set up auth state listener for future changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Fetch profile and roles
+          // Use setTimeout to avoid Supabase deadlock on token refresh
           setTimeout(async () => {
             await fetchUserData(session.user.id);
           }, 0);
@@ -56,37 +70,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      }
-      setIsLoading(false);
-    });
-
     return () => subscription.unsubscribe();
   }, []);
 
   const fetchUserData = async (userId: string) => {
     try {
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const [{ data: profileData }, { data: rolesData }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+      ]);
 
       if (profileData) {
         setProfile(profileData as Profile);
       }
-
-      // Fetch roles
-      const { data: rolesData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
 
       if (rolesData) {
         setRoles(rolesData.map((r) => r.role as AppRole));
@@ -97,10 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error ? new Error(error.message) : null };
   };
 
@@ -110,9 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: {
-          full_name: fullName,
-        },
+        data: { full_name: fullName },
       },
     });
     return { error: error ? new Error(error.message) : null };
@@ -127,23 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasRole = (role: AppRole) => roles.includes(role);
-
   const isStaff = () => roles.length > 0 && !roles.every((r) => r === "student");
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        session,
-        profile,
-        roles,
-        isLoading,
-        signIn,
-        signUp,
-        signOut,
-        hasRole,
-        isStaff,
-      }}
+      value={{ user, session, profile, roles, isLoading, signIn, signUp, signOut, hasRole, isStaff }}
     >
       {children}
     </AuthContext.Provider>

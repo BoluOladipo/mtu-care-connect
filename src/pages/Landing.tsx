@@ -82,12 +82,11 @@ const Landing = () => {
             </Button>
             <Button
               size="lg"
-              variant="outline"
-              className="w-full gap-3 text-base h-14 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              className="w-full gap-3 text-base h-14 bg-white text-primary hover:bg-white/90 font-semibold shadow-lg"
               onClick={() => navigate("/signup/staff")}
             >
               <Stethoscope className="h-5 w-5" />
-              Sign Up as Staff
+              Sign Up as Staff / Doctor
             </Button>
             <p className="text-sm opacity-70 pt-4">
               Already have an account?{" "}

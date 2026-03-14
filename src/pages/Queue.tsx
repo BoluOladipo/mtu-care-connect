@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Clock,
   UserPlus,
@@ -31,10 +33,13 @@ import {
   RefreshCw,
   Loader2,
   Trash2,
+  Thermometer,
+  HeartPulse,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQueue, useAddToQueue, useUpdateQueueEntry, useRemoveFromQueue, QueueEntryWithPatient } from "@/hooks/useQueue";
 import { usePatients } from "@/hooks/usePatients";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
@@ -59,46 +64,80 @@ const Queue = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<"normal" | "urgent" | "emergency">("normal");
+  const [patientSearch, setPatientSearch] = useState("");
   
+  // Nurse triage vitals
+  const [bpSystolic, setBpSystolic] = useState("");
+  const [bpDiastolic, setBpDiastolic] = useState("");
+  const [temperature, setTemperature] = useState("");
+  const [triageNotes, setTriageNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { user } = useAuth();
   const { data: queue = [], isLoading, refetch } = useQueue();
-  const { data: patients = [] } = usePatients();
+  const { data: patients = [] } = usePatients(patientSearch);
   const addToQueue = useAddToQueue();
   const updateEntry = useUpdateQueueEntry();
   const removeFromQueue = useRemoveFromQueue();
 
-  // Set up realtime subscription
   useEffect(() => {
     const channel = supabase
-      .channel("queue-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "queue_entries" },
-        () => {
-          refetch();
-        }
-      )
+      .channel("queue-changes-page")
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () => refetch())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [refetch]);
 
   const waitingQueue = queue.filter((q) => q.status === "waiting");
-  const inProgressQueue = queue.filter(
-    (q) => q.status === "in_consultation" || q.status === "in_lab" || q.status === "in_pharmacy"
-  );
+  const inProgressQueue = queue.filter((q) => q.status === "in_consultation" || q.status === "in_lab" || q.status === "in_pharmacy");
   const completedQueue = queue.filter((q) => q.status === "completed");
 
   const handleAddToQueue = async () => {
-    if (!selectedPatient) return;
-    await addToQueue.mutateAsync({
-      patient_id: selectedPatient,
-      priority: selectedPriority,
-    });
+    if (!selectedPatient || !user?.id) return;
+    
+    if (!bpSystolic || !bpDiastolic || !temperature) {
+      toast.error("Please record BP and temperature before adding to queue");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // 1. Record vitals (nurse triage)
+      const { error: vitalsErr } = await supabase.from("vitals").insert({
+        patient_id: selectedPatient,
+        recorded_by: user.id,
+        blood_pressure_systolic: parseInt(bpSystolic),
+        blood_pressure_diastolic: parseInt(bpDiastolic),
+        temperature: parseFloat(temperature),
+        notes: triageNotes || "Nurse triage - pre-consultation vitals",
+      });
+      if (vitalsErr) throw vitalsErr;
+
+      // 2. Add to queue
+      await addToQueue.mutateAsync({
+        patient_id: selectedPatient,
+        priority: selectedPriority,
+        notes: `BP: ${bpSystolic}/${bpDiastolic} mmHg | Temp: ${temperature}°C${triageNotes ? ` | ${triageNotes}` : ""}`,
+      });
+
+      toast.success("Vitals recorded and patient added to queue");
+      resetForm();
+    } catch (error: any) {
+      toast.error(`Failed: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
     setIsDialogOpen(false);
     setSelectedPatient("");
     setSelectedPriority("normal");
+    setPatientSearch("");
+    setBpSystolic("");
+    setBpDiastolic("");
+    setTemperature("");
+    setTriageNotes("");
   };
 
   const handleUpdateStatus = async (id: string, status: QueueStatus) => {
@@ -106,9 +145,7 @@ const Queue = () => {
     toast.success(`Patient moved to ${statusConfig[status].label}`);
   };
 
-  const calculateWaitTime = (checkInTime: string) => {
-    return differenceInMinutes(new Date(), new Date(checkInTime));
-  };
+  const calculateWaitTime = (checkInTime: string) => differenceInMinutes(new Date(), new Date(checkInTime));
 
   const getAverageWaitTime = () => {
     const waiting = queue.filter((q) => q.status === "waiting");
@@ -116,6 +153,8 @@ const Queue = () => {
     const totalWait = waiting.reduce((sum, q) => sum + calculateWaitTime(q.check_in_time), 0);
     return Math.round(totalWait / waiting.length);
   };
+
+  const selectedPatientData = patients.find((p) => p.id === selectedPatient);
 
   const renderQueueCard = (entry: QueueEntryWithPatient) => {
     const status = statusConfig[entry.status as QueueStatus];
@@ -132,21 +171,21 @@ const Queue = () => {
         )}
       >
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-col items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <div className="flex h-14 w-14 flex-col items-center justify-center rounded-xl bg-primary text-primary-foreground flex-shrink-0">
                 <span className="text-xs">Queue</span>
                 <span className="text-lg font-bold">#{queue.indexOf(entry) + 1}</span>
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-foreground">
                     {entry.patients.first_name} {entry.patients.last_name}
                   </h3>
                   <Badge className={priority.color}>{priority.label}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{entry.patients.student_id}</p>
-                <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
                     Check-in: {format(new Date(entry.check_in_time), "h:mm a")}
@@ -168,63 +207,31 @@ const Queue = () => {
                 {status.label}
               </Badge>
               {entry.status === "waiting" && (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => handleUpdateStatus(entry.id, "in_consultation")}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                    Start
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" className="gap-1" onClick={() => handleUpdateStatus(entry.id, "in_consultation")}>
+                    <Play className="h-3.5 w-3.5" />Start
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-destructive"
-                    onClick={() => removeFromQueue.mutate(entry.id)}
-                  >
+                  <Button size="sm" variant="outline" className="text-destructive" onClick={() => removeFromQueue.mutate(entry.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               )}
               {entry.status === "in_consultation" && (
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                    onClick={() => handleUpdateStatus(entry.id, "in_lab")}
-                  >
-                    <FlaskConical className="h-3.5 w-3.5" />
-                    To Lab
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => handleUpdateStatus(entry.id, "in_lab")}>
+                    <FlaskConical className="h-3.5 w-3.5" />To Lab
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                    onClick={() => handleUpdateStatus(entry.id, "in_pharmacy")}
-                  >
-                    <Pill className="h-3.5 w-3.5" />
-                    To Pharmacy
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => handleUpdateStatus(entry.id, "in_pharmacy")}>
+                    <Pill className="h-3.5 w-3.5" />To Pharmacy
                   </Button>
-                  <Button
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => handleUpdateStatus(entry.id, "completed")}
-                  >
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    Complete
+                  <Button size="sm" className="gap-1" onClick={() => handleUpdateStatus(entry.id, "completed")}>
+                    <CheckCircle className="h-3.5 w-3.5" />Complete
                   </Button>
                 </div>
               )}
               {(entry.status === "in_lab" || entry.status === "in_pharmacy") && (
-                <Button
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => handleUpdateStatus(entry.id, "completed")}
-                >
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Complete
+                <Button size="sm" className="gap-1" onClick={() => handleUpdateStatus(entry.id, "completed")}>
+                  <CheckCircle className="h-3.5 w-3.5" />Complete
                 </Button>
               )}
             </div>
@@ -251,96 +258,54 @@ const Queue = () => {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-warning/10 border-warning/20">
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning text-warning-foreground">
-                <Clock className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{waitingQueue.length}</p>
-                <p className="text-sm text-muted-foreground">Waiting</p>
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning text-warning-foreground"><Clock className="h-6 w-6" /></div>
+              <div><p className="text-2xl font-bold">{waitingQueue.length}</p><p className="text-sm text-muted-foreground">Waiting</p></div>
             </CardContent>
           </Card>
           <Card className="bg-info/10 border-info/20">
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-info text-info-foreground">
-                <Stethoscope className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{inProgressQueue.length}</p>
-                <p className="text-sm text-muted-foreground">In Progress</p>
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-info text-info-foreground"><Stethoscope className="h-6 w-6" /></div>
+              <div><p className="text-2xl font-bold">{inProgressQueue.length}</p><p className="text-sm text-muted-foreground">In Progress</p></div>
             </CardContent>
           </Card>
           <Card className="bg-success/10 border-success/20">
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success text-success-foreground">
-                <CheckCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{completedQueue.length}</p>
-                <p className="text-sm text-muted-foreground">Completed Today</p>
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success text-success-foreground"><CheckCircle className="h-6 w-6" /></div>
+              <div><p className="text-2xl font-bold">{completedQueue.length}</p><p className="text-sm text-muted-foreground">Completed Today</p></div>
             </CardContent>
           </Card>
           <Card className="bg-primary/10 border-primary/20">
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <Clock className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{getAverageWaitTime()} min</p>
-                <p className="text-sm text-muted-foreground">Avg. Wait Time</p>
-              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Clock className="h-6 w-6" /></div>
+              <div><p className="text-2xl font-bold">{getAverageWaitTime()} min</p><p className="text-sm text-muted-foreground">Avg. Wait Time</p></div>
             </CardContent>
           </Card>
         </div>
 
         {/* Actions Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button variant="outline" size="icon" onClick={() => refetch()}><RefreshCw className="h-4 w-4" /></Button>
           <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
-            <UserPlus className="h-4 w-4" />
-            Add to Queue
+            <UserPlus className="h-4 w-4" />Add to Queue
           </Button>
         </div>
 
         {/* Queue Tabs */}
         <Tabs defaultValue="waiting" className="space-y-4">
           <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="waiting" className="gap-2">
-              <Clock className="h-4 w-4" />
-              Waiting ({waitingQueue.length})
-            </TabsTrigger>
-            <TabsTrigger value="in_progress" className="gap-2">
-              <Stethoscope className="h-4 w-4" />
-              In Progress ({inProgressQueue.length})
-            </TabsTrigger>
-            <TabsTrigger value="completed" className="gap-2">
-              <CheckCircle className="h-4 w-4" />
-              Completed ({completedQueue.length})
-            </TabsTrigger>
+            <TabsTrigger value="waiting" className="gap-2"><Clock className="h-4 w-4" />Waiting ({waitingQueue.length})</TabsTrigger>
+            <TabsTrigger value="in_progress" className="gap-2"><Stethoscope className="h-4 w-4" />In Progress ({inProgressQueue.length})</TabsTrigger>
+            <TabsTrigger value="completed" className="gap-2"><CheckCircle className="h-4 w-4" />Completed ({completedQueue.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="waiting" className="space-y-4">
             {waitingQueue.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">No patients waiting</p>
-                </CardContent>
-              </Card>
+              <Card><CardContent className="flex flex-col items-center justify-center py-12"><Clock className="h-12 w-12 text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No patients waiting</p></CardContent></Card>
             ) : (
               waitingQueue
                 .sort((a, b) => {
                   const priorityOrder = { emergency: 0, urgent: 1, normal: 2 };
-                  return (
-                    priorityOrder[a.priority as keyof typeof priorityOrder] -
-                    priorityOrder[b.priority as keyof typeof priorityOrder]
-                  );
+                  return (priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder]);
                 })
                 .map(renderQueueCard)
             )}
@@ -348,61 +313,90 @@ const Queue = () => {
 
           <TabsContent value="in_progress" className="space-y-4">
             {inProgressQueue.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Stethoscope className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">No patients in progress</p>
-                </CardContent>
-              </Card>
-            ) : (
-              inProgressQueue.map(renderQueueCard)
-            )}
+              <Card><CardContent className="flex flex-col items-center justify-center py-12"><Stethoscope className="h-12 w-12 text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No patients in progress</p></CardContent></Card>
+            ) : inProgressQueue.map(renderQueueCard)}
           </TabsContent>
 
           <TabsContent value="completed" className="space-y-4">
             {completedQueue.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <CheckCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">No completed visits today</p>
-                </CardContent>
-              </Card>
-            ) : (
-              completedQueue.map(renderQueueCard)
-            )}
+              <Card><CardContent className="flex flex-col items-center justify-center py-12"><CheckCircle className="h-12 w-12 text-muted-foreground/50 mb-4" /><p className="text-muted-foreground">No completed visits today</p></CardContent></Card>
+            ) : completedQueue.map(renderQueueCard)}
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Add to Queue Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+      {/* Add to Queue Dialog - Nurse Triage */}
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); else setIsDialogOpen(true); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Patient to Queue</DialogTitle>
-            <DialogDescription>Select a patient to add to the waiting queue</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <HeartPulse className="h-5 w-5 text-primary" />
+              Nurse Triage — Add Patient to Queue
+            </DialogTitle>
+            <DialogDescription>Record the patient's vitals and add them to the doctor's queue</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-4">
+            {/* Patient Selection */}
             <div className="space-y-2">
-              <Label>Patient</Label>
-              <Select value={selectedPatient} onValueChange={setSelectedPatient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select patient..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {patients.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.first_name} {p.last_name} ({p.student_id})
-                    </SelectItem>
+              <Label>Search Patient by Name or Matric No.</Label>
+              <Input
+                placeholder="Type to search..."
+                value={patientSearch}
+                onChange={(e) => setPatientSearch(e.target.value)}
+              />
+              {patientSearch && patients.length > 0 && !selectedPatientData && (
+                <div className="max-h-32 overflow-y-auto rounded border bg-background">
+                  {patients.slice(0, 5).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                      onClick={() => { setSelectedPatient(p.id); setPatientSearch(`${p.first_name} ${p.last_name} (${p.student_id})`); }}
+                    >
+                      <p className="font-medium">{p.first_name} {p.last_name}</p>
+                      <p className="text-xs text-muted-foreground">{p.student_id}</p>
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
+              {selectedPatientData && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm">{selectedPatientData.first_name} {selectedPatientData.last_name}</p>
+                    <p className="text-xs text-muted-foreground">{selectedPatientData.student_id} • {selectedPatientData.faculty}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedPatient(""); setPatientSearch(""); }}>Change</Button>
+                </div>
+              )}
             </div>
+
+            {/* Vitals Section */}
+            <div className="space-y-3">
+              <h4 className="font-medium flex items-center gap-2 text-sm">
+                <Thermometer className="h-4 w-4 text-primary" />
+                Record Vitals
+              </h4>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">BP Systolic (mmHg) *</Label>
+                  <Input type="number" placeholder="120" value={bpSystolic} onChange={(e) => setBpSystolic(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">BP Diastolic (mmHg) *</Label>
+                  <Input type="number" placeholder="80" value={bpDiastolic} onChange={(e) => setBpDiastolic(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Temperature (°C) *</Label>
+                  <Input type="number" step="0.1" placeholder="36.5" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Priority */}
             <div className="space-y-2">
               <Label>Priority</Label>
               <Select value={selectedPriority} onValueChange={(v) => setSelectedPriority(v as any)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="urgent">Urgent</SelectItem>
@@ -410,14 +404,18 @@ const Queue = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label>Additional Notes</Label>
+              <Textarea placeholder="Any observations or complaints..." value={triageNotes} onChange={(e) => setTriageNotes(e.target.value)} rows={2} />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddToQueue} disabled={!selectedPatient || addToQueue.isPending}>
-              {addToQueue.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add to Queue
+            <Button variant="outline" onClick={resetForm}>Cancel</Button>
+            <Button onClick={handleAddToQueue} disabled={!selectedPatient || isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Record Vitals & Add to Queue
             </Button>
           </DialogFooter>
         </DialogContent>
