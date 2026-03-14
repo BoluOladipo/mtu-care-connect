@@ -6,11 +6,11 @@ import {
   ClipboardList,
   Pill,
   FlaskConical,
-  Syringe,
   FileText,
   BarChart3,
   Settings,
   LogOut,
+  Stethoscope,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,24 +27,30 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 
-const mainNavItems = [
+interface NavItem {
+  title: string;
+  icon: typeof LayoutDashboard;
+  path: string;
+  roles?: string[]; // if empty/undefined, show to all staff
+}
+
+const mainNavItems: NavItem[] = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { title: "Queue", icon: ClipboardList, path: "/queue" },
-  { title: "Appointments", icon: Calendar, path: "/appointments" },
+  { title: "Queue", icon: ClipboardList, path: "/queue", roles: ["admin", "nurse", "doctor"] },
+  { title: "Appointments", icon: Calendar, path: "/appointments", roles: ["admin", "doctor", "nurse"] },
 ];
 
-const clinicalNavItems = [
-  { title: "Patients", icon: Users, path: "/patients" },
-  { title: "Consultations", icon: FlaskConical, path: "/consultations" },
-  { title: "Laboratory", icon: FlaskConical, path: "/laboratory" },
-  { title: "Pharmacy", icon: Pill, path: "/pharmacy" },
-  { title: "Immunization", icon: Syringe, path: "/immunization" },
+const clinicalNavItems: NavItem[] = [
+  { title: "Patients", icon: Users, path: "/patients", roles: ["admin", "doctor", "nurse"] },
+  { title: "Consultations", icon: Stethoscope, path: "/consultations", roles: ["admin", "doctor"] },
+  { title: "Laboratory", icon: FlaskConical, path: "/laboratory", roles: ["admin", "lab_technician", "doctor"] },
+  { title: "Pharmacy", icon: Pill, path: "/pharmacy", roles: ["admin", "pharmacist"] },
 ];
 
-const adminNavItems = [
-  { title: "Reports", icon: BarChart3, path: "/reports" },
-  { title: "Records", icon: FileText, path: "/records" },
-  { title: "Settings", icon: Settings, path: "/settings" },
+const adminNavItems: NavItem[] = [
+  { title: "Reports", icon: BarChart3, path: "/reports", roles: ["admin"] },
+  { title: "Records", icon: FileText, path: "/records", roles: ["admin", "doctor", "nurse"] },
+  { title: "Settings", icon: Settings, path: "/settings", roles: ["admin"] },
 ];
 
 export function AppSidebar() {
@@ -66,13 +72,48 @@ export function AppSidebar() {
     if (roles.includes("nurse")) return "Nurse";
     if (roles.includes("pharmacist")) return "Pharmacist";
     if (roles.includes("lab_technician")) return "Lab Technician";
-    if (roles.includes("receptionist")) return "Receptionist";
     if (roles.includes("student")) return "Student";
     return "Staff";
   };
 
+  const filterByRole = (items: NavItem[]) =>
+    items.filter((item) => {
+      if (!item.roles) return true;
+      return item.roles.some((r) => roles.includes(r as any));
+    });
+
   const handleLogout = async () => {
     await signOut();
+  };
+
+  const renderNavGroup = (label: string, items: NavItem[]) => {
+    const filtered = filterByRole(items);
+    if (filtered.length === 0) return null;
+    return (
+      <SidebarGroup>
+        <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {filtered.map((item) => (
+              <SidebarMenuItem key={item.path}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive(item.path)}
+                  className="transition-colors hover:bg-sidebar-accent"
+                >
+                  <Link to={item.path} className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
   };
 
   return (
@@ -92,77 +133,9 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2 py-4">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Main
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.path)}
-                    className="transition-colors hover:bg-sidebar-accent"
-                  >
-                    <Link to={item.path} className="flex items-center gap-3">
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Clinical
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {clinicalNavItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.path)}
-                    className="transition-colors hover:bg-sidebar-accent"
-                  >
-                    <Link to={item.path} className="flex items-center gap-3">
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Administration
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminNavItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.path)}
-                    className="transition-colors hover:bg-sidebar-accent"
-                  >
-                    <Link to={item.path} className="flex items-center gap-3">
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {renderNavGroup("Main", mainNavItems)}
+        {renderNavGroup("Clinical", clinicalNavItems)}
+        {renderNavGroup("Administration", adminNavItems)}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
@@ -179,7 +152,7 @@ export function AppSidebar() {
             </span>
             <span className="text-xs text-muted-foreground">{getRoleLabel()}</span>
           </div>
-          <button 
+          <button
             onClick={handleLogout}
             className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >

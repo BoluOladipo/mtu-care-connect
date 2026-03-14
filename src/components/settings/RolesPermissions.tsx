@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Shield, Check } from "lucide-react";
@@ -35,8 +34,8 @@ const ROLE_PERMISSIONS = {
     description: "Patient care access",
     permissions: [
       "View patient records",
-      "Record patient vitals",
-      "Administer immunizations",
+      "Record patient vitals (BP, temperature)",
+      "Add patients to queue for doctor",
       "Manage patient queue",
       "Assist with consultations",
     ],
@@ -63,18 +62,6 @@ const ROLE_PERMISSIONS = {
       "Enter test results",
       "Manage lab inventory",
       "Generate lab reports",
-    ],
-  },
-  receptionist: {
-    label: "Receptionist",
-    color: "bg-muted text-muted-foreground",
-    description: "Front desk access",
-    permissions: [
-      "Register new patients",
-      "Manage appointments",
-      "Check-in patients",
-      "Manage queue",
-      "View basic patient info",
     ],
   },
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  CalendarPlus, Calendar, Clock, User, ChevronLeft, ChevronRight, Loader2, CheckCircle,
+  CalendarPlus, Calendar, Clock, User, ChevronLeft, ChevronRight, Loader2, CheckCircle, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppointments, useCreateAppointment, useCancelAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
@@ -31,7 +31,6 @@ import { toast } from "sonner";
 const appointmentTypes = [
   { value: "general", label: "General Checkup" },
   { value: "follow_up", label: "Follow-up" },
-  { value: "immunization", label: "Immunization" },
   { value: "fitness_exam", label: "Medical Fitness" },
   { value: "specialist", label: "Specialist" },
 ];
@@ -67,7 +66,6 @@ const Appointments = () => {
 
   const createAppointment = useCreateAppointment();
   const cancelAppointment = useCancelAppointment();
-  const updateAppointment = useUpdateAppointment();
 
   const { register, handleSubmit, reset, setValue, watch } = useForm({
     defaultValues: {
@@ -87,6 +85,35 @@ const Appointments = () => {
     selectedDrugs: [] as { drug_id: string; name: string; quantity: number; dosage: string; frequency: string; duration: string }[],
   });
   const [isSubmittingAttendance, setIsSubmittingAttendance] = useState(false);
+  const [nurseVitalsLoaded, setNurseVitalsLoaded] = useState(false);
+
+  // When attendance dialog opens, fetch the latest vitals recorded by nurse
+  useEffect(() => {
+    if (!attendanceAppointment) {
+      setNurseVitalsLoaded(false);
+      return;
+    }
+    const fetchNurseVitals = async () => {
+      const { data: vitals } = await supabase
+        .from("vitals")
+        .select("*")
+        .eq("patient_id", attendanceAppointment.patient_id)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (vitals) {
+        setAttForm((prev) => ({
+          ...prev,
+          bp_systolic: vitals.blood_pressure_systolic?.toString() || "",
+          bp_diastolic: vitals.blood_pressure_diastolic?.toString() || "",
+          temperature: vitals.temperature?.toString() || "",
+        }));
+        setNurseVitalsLoaded(true);
+      }
+    };
+    fetchNurseVitals();
+  }, [attendanceAppointment]);
 
   const onSubmit = handleSubmit(async (data) => {
     if (!user?.id) return;
@@ -107,21 +134,21 @@ const Appointments = () => {
     if (!attendanceAppointment || !user?.id) return;
     const apt = attendanceAppointment;
 
-    if (!attForm.bp_systolic || !attForm.bp_diastolic || !attForm.temperature || !attForm.symptoms || !attForm.conclusion) {
-      toast.error("Please fill in all required fields");
+    if (!attForm.symptoms || !attForm.conclusion) {
+      toast.error("Please fill in symptoms and diagnosis");
       return;
     }
 
     setIsSubmittingAttendance(true);
     try {
-      // 1. Record vitals
+      // 1. Record/update vitals if doctor changed them
       await supabase.from("vitals").insert({
         patient_id: apt.patient_id,
         recorded_by: user.id,
-        blood_pressure_systolic: parseInt(attForm.bp_systolic),
-        blood_pressure_diastolic: parseInt(attForm.bp_diastolic),
-        temperature: parseFloat(attForm.temperature),
-        notes: `Symptoms: ${attForm.symptoms}`,
+        blood_pressure_systolic: attForm.bp_systolic ? parseInt(attForm.bp_systolic) : null,
+        blood_pressure_diastolic: attForm.bp_diastolic ? parseInt(attForm.bp_diastolic) : null,
+        temperature: attForm.temperature ? parseFloat(attForm.temperature) : null,
+        notes: `Doctor consultation - Symptoms: ${attForm.symptoms}`,
       });
 
       // 2. Create consultation
@@ -136,7 +163,7 @@ const Appointments = () => {
 
       if (conErr) throw conErr;
 
-      // 3. Create prescriptions for selected drugs
+      // 3. Create prescriptions (NOT dispensed - forwarded to pharmacist)
       if (consultation && attForm.selectedDrugs.length > 0) {
         const prescriptions = attForm.selectedDrugs.map((d) => ({
           consultation_id: consultation.id,
@@ -145,9 +172,7 @@ const Appointments = () => {
           frequency: d.frequency || "3 times daily",
           duration: d.duration || "5 days",
           quantity: d.quantity || 1,
-          dispensed: true,
-          dispensed_by: user.id,
-          dispensed_at: new Date().toISOString(),
+          dispensed: false, // Forwarded to pharmacist
         }));
         const { error: rxErr } = await supabase.from("prescriptions").insert(prescriptions);
         if (rxErr) throw rxErr;
@@ -156,10 +181,14 @@ const Appointments = () => {
       // 4. Mark appointment as attended
       await supabase.from("appointments").update({ status: "attended" }).eq("id", apt.id);
 
-      toast.success("Patient attended to successfully!");
+      toast.success(
+        attForm.selectedDrugs.length > 0
+          ? "Patient attended! Prescriptions forwarded to pharmacist."
+          : "Patient attended successfully!"
+      );
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["drugs-list"] });
+      queryClient.invalidateQueries({ queryKey: ["prescriptions"] });
 
       setAttendanceAppointment(null);
       setAttForm({ bp_systolic: "", bp_diastolic: "", temperature: "", symptoms: "", conclusion: "", selectedDrugs: [] });
@@ -173,9 +202,7 @@ const Appointments = () => {
   const toggleDrug = (drug: { id: string; name: string; current_stock: number }) => {
     setAttForm((prev) => {
       const exists = prev.selectedDrugs.find((d) => d.drug_id === drug.id);
-      if (exists) {
-        return { ...prev, selectedDrugs: prev.selectedDrugs.filter((d) => d.drug_id !== drug.id) };
-      }
+      if (exists) return { ...prev, selectedDrugs: prev.selectedDrugs.filter((d) => d.drug_id !== drug.id) };
       return {
         ...prev,
         selectedDrugs: [...prev.selectedDrugs, {
@@ -327,29 +354,37 @@ const Appointments = () => {
       </div>
 
       {/* Attendance Form Dialog */}
-      <Dialog open={!!attendanceAppointment} onOpenChange={(open) => { if (!open) setAttendanceAppointment(null); }}>
+      <Dialog open={!!attendanceAppointment} onOpenChange={(open) => { if (!open) { setAttendanceAppointment(null); setAttForm({ bp_systolic: "", bp_diastolic: "", temperature: "", symptoms: "", conclusion: "", selectedDrugs: [] }); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Patient Attendance Form</DialogTitle>
             <DialogDescription>
-              Record vitals, symptoms, diagnosis, and prescriptions for {attendanceAppointment?.patients?.first_name} {attendanceAppointment?.patients?.last_name}
+              Record consultation details for {attendanceAppointment?.patients?.first_name} {attendanceAppointment?.patients?.last_name}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5 py-4">
-            {/* Vitals */}
+            {/* Vitals - pre-filled from nurse */}
             <div>
-              <h4 className="font-medium mb-3">Vitals</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-medium">Vitals</h4>
+                {nurseVitalsLoaded && (
+                  <Badge variant="outline" className="bg-info/10 text-info border-info/30 gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Pre-filled from nurse triage
+                  </Badge>
+                )}
+              </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>BP Systolic (mmHg) *</Label>
+                  <Label>BP Systolic (mmHg)</Label>
                   <Input type="number" placeholder="120" value={attForm.bp_systolic} onChange={(e) => setAttForm({ ...attForm, bp_systolic: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>BP Diastolic (mmHg) *</Label>
+                  <Label>BP Diastolic (mmHg)</Label>
                   <Input type="number" placeholder="80" value={attForm.bp_diastolic} onChange={(e) => setAttForm({ ...attForm, bp_diastolic: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Temperature (°C) *</Label>
+                  <Label>Temperature (°C)</Label>
                   <Input type="number" step="0.1" placeholder="36.5" value={attForm.temperature} onChange={(e) => setAttForm({ ...attForm, temperature: e.target.value })} />
                 </div>
               </div>
@@ -367,9 +402,9 @@ const Appointments = () => {
               <Textarea placeholder="Your diagnosis and conclusion..." value={attForm.conclusion} onChange={(e) => setAttForm({ ...attForm, conclusion: e.target.value })} rows={2} />
             </div>
 
-            {/* Drugs */}
+            {/* Drugs - prescriptions forwarded to pharmacist */}
             <div>
-              <Label className="mb-3 block">Drugs Given</Label>
+              <Label className="mb-3 block">Prescribe Drugs (forwarded to Pharmacist)</Label>
               <ScrollArea className="max-h-48 rounded-lg border p-3">
                 <div className="space-y-2">
                   {drugs.map((drug) => (
@@ -379,14 +414,13 @@ const Appointments = () => {
                         onCheckedChange={() => toggleDrug(drug)}
                       />
                       <span className="text-sm flex-1">{drug.name}</span>
-                      <Badge variant="outline" className="text-xs">{drug.current_stock} left</Badge>
+                      <Badge variant="outline" className="text-xs">{drug.current_stock} in stock</Badge>
                     </div>
                   ))}
                   {drugs.length === 0 && <p className="text-sm text-muted-foreground">No drugs in inventory</p>}
                 </div>
               </ScrollArea>
 
-              {/* Selected drugs details */}
               {attForm.selectedDrugs.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {attForm.selectedDrugs.map((d) => (
@@ -417,7 +451,7 @@ const Appointments = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAttendanceAppointment(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAttendanceAppointment(null); setAttForm({ bp_systolic: "", bp_diastolic: "", temperature: "", symptoms: "", conclusion: "", selectedDrugs: [] }); }}>Cancel</Button>
             <Button onClick={handleAttendanceSubmit} disabled={isSubmittingAttendance}>
               {isSubmittingAttendance && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Complete & Mark Attended

@@ -1,6 +1,5 @@
 import { AppLayout } from "@/components/layout/AppLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { QuickActions } from "@/components/dashboard/QuickActions";
 import { LiveQueue } from "@/components/queue/LiveQueue";
 import { TodayAppointments } from "@/components/dashboard/TodayAppointments";
 import { AlertsPanel } from "@/components/dashboard/AlertsPanel";
@@ -59,9 +58,6 @@ const Dashboard = () => {
             variant="warning"
           />
         </div>
-
-        {/* Quick Actions */}
-        <QuickActions />
 
         {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-2">

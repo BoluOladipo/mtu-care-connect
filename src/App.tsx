@@ -13,7 +13,6 @@ import Queue from "./pages/Queue";
 import Appointments from "./pages/Appointments";
 import Pharmacy from "./pages/Pharmacy";
 import Laboratory from "./pages/Laboratory";
-import Immunization from "./pages/Immunization";
 import Consultations from "./pages/Consultations";
 import Reports from "./pages/Reports";
 import Records from "./pages/Records";
@@ -47,7 +46,6 @@ const App = () => (
             <Route path="/appointments" element={<ProtectedRoute><Appointments /></ProtectedRoute>} />
             <Route path="/pharmacy" element={<ProtectedRoute><Pharmacy /></ProtectedRoute>} />
             <Route path="/laboratory" element={<ProtectedRoute><Laboratory /></ProtectedRoute>} />
-            <Route path="/immunization" element={<ProtectedRoute><Immunization /></ProtectedRoute>} />
             <Route path="/consultations" element={<ProtectedRoute><Consultations /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/records" element={<ProtectedRoute><Records /></ProtectedRoute>} />
