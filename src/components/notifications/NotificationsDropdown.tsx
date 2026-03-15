@@ -36,6 +36,14 @@ type NotificationItem = ComputedAlert | DbNotification;
 export function NotificationsDropdown() {
   const [computedAlerts, setComputedAlerts] = useState<ComputedAlert[]>([]);
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("dismissed-alert-ids");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const { data: dbNotifications = [], isLoading: isLoadingDb } = useNotifications();
   const markRead = useMarkNotificationRead();
@@ -105,7 +113,10 @@ export function NotificationsDropdown() {
       read: n.read,
       isComputed: false as const,
     })),
-    ...computedAlerts,
+    ...computedAlerts.map((a) => ({
+      ...a,
+      read: dismissedAlertIds.has(a.id),
+    })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   const unreadCount = allNotifications.filter((n) => !n.read).length;
@@ -126,16 +137,30 @@ export function NotificationsDropdown() {
     }
   };
 
+  const persistDismissedIds = (ids: Set<string>) => {
+    setDismissedAlertIds(ids);
+    try {
+      localStorage.setItem("dismissed-alert-ids", JSON.stringify([...ids]));
+    } catch {}
+  };
+
   const handleMarkAllRead = () => {
     // Mark DB notifications as read
     markAllRead.mutate();
-    // Mark computed alerts as read (local state only)
-    setComputedAlerts((prev) => prev.map((n) => ({ ...n, read: true })));
+    // Mark computed alerts as read (persisted in localStorage)
+    const newDismissed = new Set(dismissedAlertIds);
+    computedAlerts.forEach((a) => newDismissed.add(a.id));
+    persistDismissedIds(newDismissed);
   };
 
   const handleNotificationClick = (notification: NotificationItem) => {
     if (!notification.read && !notification.isComputed) {
       markRead.mutate(notification.id);
+    }
+    if (!notification.read && notification.isComputed) {
+      const newDismissed = new Set(dismissedAlertIds);
+      newDismissed.add(notification.id);
+      persistDismissedIds(newDismissed);
     }
   };
 
