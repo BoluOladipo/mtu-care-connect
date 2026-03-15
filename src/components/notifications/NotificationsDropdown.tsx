@@ -113,7 +113,10 @@ export function NotificationsDropdown() {
       read: n.read,
       isComputed: false as const,
     })),
-    ...computedAlerts,
+    ...computedAlerts.map((a) => ({
+      ...a,
+      read: dismissedAlertIds.has(a.id),
+    })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   const unreadCount = allNotifications.filter((n) => !n.read).length;
