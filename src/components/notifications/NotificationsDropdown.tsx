@@ -36,6 +36,14 @@ type NotificationItem = ComputedAlert | DbNotification;
 export function NotificationsDropdown() {
   const [computedAlerts, setComputedAlerts] = useState<ComputedAlert[]>([]);
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(true);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("dismissed-alert-ids");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const { data: dbNotifications = [], isLoading: isLoadingDb } = useNotifications();
   const markRead = useMarkNotificationRead();
