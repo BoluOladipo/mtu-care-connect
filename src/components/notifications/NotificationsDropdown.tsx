@@ -137,16 +137,30 @@ export function NotificationsDropdown() {
     }
   };
 
+  const persistDismissedIds = (ids: Set<string>) => {
+    setDismissedAlertIds(ids);
+    try {
+      localStorage.setItem("dismissed-alert-ids", JSON.stringify([...ids]));
+    } catch {}
+  };
+
   const handleMarkAllRead = () => {
     // Mark DB notifications as read
     markAllRead.mutate();
-    // Mark computed alerts as read (local state only)
-    setComputedAlerts((prev) => prev.map((n) => ({ ...n, read: true })));
+    // Mark computed alerts as read (persisted in localStorage)
+    const newDismissed = new Set(dismissedAlertIds);
+    computedAlerts.forEach((a) => newDismissed.add(a.id));
+    persistDismissedIds(newDismissed);
   };
 
   const handleNotificationClick = (notification: NotificationItem) => {
     if (!notification.read && !notification.isComputed) {
       markRead.mutate(notification.id);
+    }
+    if (!notification.read && notification.isComputed) {
+      const newDismissed = new Set(dismissedAlertIds);
+      newDismissed.add(notification.id);
+      persistDismissedIds(newDismissed);
     }
   };
 
