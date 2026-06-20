@@ -13,50 +13,40 @@ export interface LabRequestWithPatient extends LabRequest {
     last_name: string;
     student_id: string;
   };
-  profiles?: {
-    full_name: string;
-  } | null;
 }
 
 export function useLabRequests(searchQuery?: string) {
   return useQuery({
     queryKey: ["lab_requests", searchQuery],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("lab_requests")
         .select(`
           *,
-          patients (
-            first_name,
-            last_name,
-            student_id
-          )
+          patients ( first_name, last_name, student_id )
         `)
         .order("requested_at", { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
-      
-      // Filter client-side if search query provided
+
       if (searchQuery) {
-        const lowerQuery = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase();
         return (data as LabRequestWithPatient[]).filter(
-          (req) =>
-            req.patients.first_name.toLowerCase().includes(lowerQuery) ||
-            req.patients.last_name.toLowerCase().includes(lowerQuery) ||
-            req.patients.student_id.toLowerCase().includes(lowerQuery) ||
-            req.test_type.toLowerCase().includes(lowerQuery)
+          (r) =>
+            r.patients.first_name.toLowerCase().includes(q) ||
+            r.patients.last_name.toLowerCase().includes(q) ||
+            r.patients.student_id.toLowerCase().includes(q) ||
+            r.test_type.toLowerCase().includes(q) ||
+            (r.accession_number ?? "").toLowerCase().includes(q)
         );
       }
-      
       return data as LabRequestWithPatient[];
     },
   });
 }
 
 export function useCreateLabRequest() {
-  const queryClient = useQueryClient();
-
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (request: LabRequestInsert) => {
       const { data, error } = await supabase
@@ -68,51 +58,23 @@ export function useCreateLabRequest() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lab_requests"] });
-      toast.success("Lab request created successfully");
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Lab request created");
     },
-    onError: (error) => {
-      toast.error(`Failed to create lab request: ${error.message}`);
-    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
   });
 }
 
-export function useUpdateLabRequest() {
-  const queryClient = useQueryClient();
-
+export function useCollectSample() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: LabRequestUpdate & { id: string }) => {
-      const { data, error } = await supabase
-        .from("lab_requests")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lab_requests"] });
-      toast.success("Lab request updated");
-    },
-    onError: (error) => {
-      toast.error(`Failed to update lab request: ${error.message}`);
-    },
-  });
-}
-
-export function useCompleteLabRequest() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, results, completedBy }: { id: string; results: string; completedBy: string }) => {
+    mutationFn: async ({ id, collectedBy }: { id: string; collectedBy: string }) => {
       const { data, error } = await supabase
         .from("lab_requests")
         .update({
-          status: "completed",
-          results,
-          completed_at: new Date().toISOString(),
-          completed_by: completedBy,
+          status: "sample_collected",
+          sample_collected_at: new Date().toISOString(),
+          sample_collected_by: collectedBy,
         })
         .eq("id", id)
         .select()
@@ -121,18 +83,15 @@ export function useCompleteLabRequest() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lab_requests"] });
-      toast.success("Lab results recorded");
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Sample collected & accessioned");
     },
-    onError: (error) => {
-      toast.error(`Failed to record results: ${error.message}`);
-    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
   });
 }
 
 export function useStartLabRequest() {
-  const queryClient = useQueryClient();
-
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await supabase
@@ -145,11 +104,98 @@ export function useStartLabRequest() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lab_requests"] });
-      toast.success("Lab test started");
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Testing started");
     },
-    onError: (error) => {
-      toast.error(`Failed to start test: ${error.message}`);
-    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
   });
 }
+
+export function useSubmitForValidation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      results: string;
+      unit?: string;
+      reference_range?: string;
+      is_abnormal?: boolean;
+      is_critical?: boolean;
+      technician_notes?: string;
+      completedBy: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("lab_requests")
+        .update({
+          status: "awaiting_validation",
+          results: args.results,
+          unit: args.unit ?? null,
+          reference_range: args.reference_range ?? null,
+          is_abnormal: !!args.is_abnormal,
+          is_critical: !!args.is_critical,
+          technician_notes: args.technician_notes ?? null,
+          completed_by: args.completedBy,
+        })
+        .eq("id", args.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Submitted for validation");
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+}
+
+export function useValidateAndComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, validatedBy }: { id: string; validatedBy: string }) => {
+      const { data, error } = await supabase
+        .from("lab_requests")
+        .update({
+          status: "completed",
+          validated_by: validatedBy,
+          validated_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Report validated & released");
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+}
+
+export function useRequestRepeat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from("lab_requests")
+        .update({ status: "in_progress", results: null })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab_requests"] });
+      toast.success("Repeat test requested");
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+}
+
+// Backwards-compat alias (old import name kept for any consumers)
+export const useCompleteLabRequest = useValidateAndComplete;
