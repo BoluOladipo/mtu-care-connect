@@ -241,43 +241,76 @@ export type Database = {
       }
       lab_requests: {
         Row: {
+          accession_number: string | null
+          category: string | null
           completed_at: string | null
           completed_by: string | null
           consultation_id: string | null
           id: string
+          is_abnormal: boolean
+          is_critical: boolean
           patient_id: string
           priority: string
+          reference_range: string | null
           requested_at: string
           requested_by: string
           results: string | null
+          sample_collected_at: string | null
+          sample_collected_by: string | null
           status: string
+          technician_notes: string | null
           test_type: string
+          unit: string | null
+          validated_at: string | null
+          validated_by: string | null
         }
         Insert: {
+          accession_number?: string | null
+          category?: string | null
           completed_at?: string | null
           completed_by?: string | null
           consultation_id?: string | null
           id?: string
+          is_abnormal?: boolean
+          is_critical?: boolean
           patient_id: string
           priority?: string
+          reference_range?: string | null
           requested_at?: string
           requested_by: string
           results?: string | null
+          sample_collected_at?: string | null
+          sample_collected_by?: string | null
           status?: string
+          technician_notes?: string | null
           test_type: string
+          unit?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Update: {
+          accession_number?: string | null
+          category?: string | null
           completed_at?: string | null
           completed_by?: string | null
           consultation_id?: string | null
           id?: string
+          is_abnormal?: boolean
+          is_critical?: boolean
           patient_id?: string
           priority?: string
+          reference_range?: string | null
           requested_at?: string
           requested_by?: string
           results?: string | null
+          sample_collected_at?: string | null
+          sample_collected_by?: string | null
           status?: string
+          technician_notes?: string | null
           test_type?: string
+          unit?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
         }
         Relationships: [
           {
