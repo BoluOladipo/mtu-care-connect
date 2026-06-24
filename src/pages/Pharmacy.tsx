@@ -273,11 +273,7 @@ const Pharmacy = () => {
                         <Label htmlFor="minimum_stock">Minimum Stock *</Label>
                         <Input id="minimum_stock" type="number" {...register("minimum_stock", { valueAsNumber: true })} />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="unit_price">Unit Price (₦) *</Label>
-                        <Input id="unit_price" type="number" {...register("unit_price", { valueAsNumber: true })} />
-                      </div>
-                    </div>
+                                         </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="batch_number">Batch Number</Label>
