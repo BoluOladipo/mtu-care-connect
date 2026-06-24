@@ -80,7 +80,7 @@ const Pharmacy = () => {
       unit_of_measure: "tablets",
       current_stock: 0,
       minimum_stock: 10,
-      unit_price: 0,
+     
       batch_number: "",
       expiry_date: "",
       supplier: "",
@@ -97,7 +97,7 @@ const Pharmacy = () => {
       unit_of_measure: data.unit_of_measure,
       current_stock: data.current_stock,
       minimum_stock: data.minimum_stock,
-      unit_price: data.unit_price,
+     
       batch_number: data.batch_number || null,
       expiry_date: data.expiry_date || null,
       supplier: data.supplier || null,
