@@ -333,7 +333,7 @@ const Pharmacy = () => {
                           <TableHead>Stock Level</TableHead>
                           <TableHead>Batch</TableHead>
                           <TableHead>Expiry</TableHead>
-                          <TableHead>Unit Price</TableHead>
+                         
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -391,7 +391,7 @@ const Pharmacy = () => {
                                   )}
                                 </span>
                               </TableCell>
-                              <TableCell>₦{Number(drug.unit_price).toLocaleString()}</TableCell>
+                             
                               <TableCell>
                                 <Badge className={stockStatus.color}>{stockStatus.label}</Badge>
                               </TableCell>
